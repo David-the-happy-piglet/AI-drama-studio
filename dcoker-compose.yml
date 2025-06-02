@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+  youtube-video-service:
+    build: ./youtube-video-service
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+  minio:
+    image: minio:latest
+    container_name: minio
+    ports:
+      - 9000:9000
+      - 9001:9001
+    env_file:
+      - .env
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - 6379:6379
+    volumes:
+      - redis-data:/data
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    env_file:
+      - .env
+
+
+volumes:
+  dbdata:
+  minio-data:
+  redis-data:
