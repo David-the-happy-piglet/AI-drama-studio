@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}修改受众画像{% endblock %}
+{% block content %}
+<h1>修改受众画像</h1>
+<form class="card" method="post">
+  <p class="muted">标识：{{ audience.slug }}</p>
+  <label>画像名称</label>
+  <input name="name" value="{{ audience.name }}" required>
+  <label>年龄范围</label>
+  <input name="age_range" value="{{ audience.age_range }}" required>
+  <label>受众描述</label>
+  <textarea name="description">{{ audience.description }}</textarea>
+  <label>关注领域（每行一个）</label>
+  <textarea name="interests">{{ interests }}</textarea>
+  <label>写作风格</label>
+  <textarea name="writing_style">{{ audience.writing_style }}</textarea>
+  <label>标题偏好（每行一个）</label>
+  <textarea name="title_preferences">{{ title_preferences }}</textarea>
+  <label>目标字数</label>
+  <input type="number" min="300" max="5000" name="article_length" value="{{ audience.article_length }}">
+  <label>图片风格</label>
+  <textarea name="image_style">{{ audience.image_style }}</textarea>
+  <label>禁止主题（每行一个）</label>
+  <textarea name="prohibited_topics">{{ prohibited_topics }}</textarea>
+  <label><input style="width:auto" type="checkbox" name="enabled" {% if audience.enabled %}checked{% endif %}> 启用</label>
+  <p><button type="submit">保存画像</button></p>
+</form>
+{% endblock %}
+

@@ -1,0 +1,2 @@
+"""Wechat content generator service."""
+

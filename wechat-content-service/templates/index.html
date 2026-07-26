@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>内容控制台</h1>
+<div class="grid">
+  <section class="card">
+    <h2>生成文章</h2>
+    <form method="post" action="/admin/generate">
+      <label for="topic">文章主题</label>
+      <input id="topic" name="topic" required placeholder="例如：人到中年如何改善睡眠">
+      <label for="category">内容分类</label>
+      <input id="category" name="category" value="日常养生">
+      <label for="audience_slug">目标受众</label>
+      <select id="audience_slug" name="audience_slug">
+        {% for audience in audiences %}
+          {% if audience.enabled %}
+          <option value="{{ audience.slug }}">{{ audience.name }}（{{ audience.age_range }}岁）</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+      <label for="provider">文字模型</label>
+      <select id="provider" name="provider">
+        <option value="deepseek">DeepSeek（deepseek-v4-pro）</option>
+        <option value="minimax">MiniMax（MiniMax-M2.7）</option>
+        <option value="kimi">Kimi（kimi-k3）</option>
+        <option value="mock">本地 Mock（无需 API Key）</option>
+      </select>
+      <label for="headline_intensity">标题吸睛程度</label>
+      <select id="headline_intensity" name="headline_intensity">
+        <option value="1">1 — 克制可信</option>
+        <option value="2">2 — 温和吸引</option>
+        <option value="3">3 — 标准传播</option>
+        <option value="4" selected>4 — 强吸引（推荐）</option>
+        <option value="5">5 — 最大化点击欲望</option>
+      </select>
+      <p class="muted">
+        等级越高，越强调数字、反差、悬念和人群代入；始终禁止虚假健康承诺。
+      </p>
+      <label>
+        <input type="checkbox" name="humanize" value="true" checked
+               style="width:auto;margin-right:8px">
+        使用 Humanizer-zh 二次润色
+      </label>
+      <p class="muted">
+        减少机械排比、AI 高频词和模板化结尾；会增加一次文字模型调用。
+      </p>
+      <p><button type="submit">生成文章</button></p>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>受众画像</h2>
+    {% for audience in audiences %}
+      <p>
+        <strong>{{ audience.name }}</strong>
+        <span class="tag">{{ audience.age_range }}岁</span>
+        {% if not audience.enabled %}<span class="tag">已停用</span>{% endif %}
+        <br><span class="muted">{{ audience.description }}</span>
+        <br><a href="/admin/audiences/{{ audience.id }}">修改画像</a>
+      </p>
+    {% endfor %}
+  </section>
+
+  <section class="card">
+    <h2>模型 Token 用量</h2>
+    <table>
+      <thead>
+        <tr><th>模型</th><th>输入</th><th>输出</th><th>总计</th></tr>
+      </thead>
+      <tbody>
+        {% for item in token_usage.models %}
+        <tr>
+          <td>
+            {{ item.provider }}<br>
+            <span class="muted">{{ item.model }}</span>
+          </td>
+          {% if item.metered_requests %}
+          <td>{{ item.prompt_tokens }}</td>
+          <td>{{ item.completion_tokens }}</td>
+          <td>{{ item.total_tokens }}</td>
+          {% else %}
+          <td>—</td><td>—</td><td>—</td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">还没有模型调用记录</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">
+      已计量 {{ token_usage.totals.metered_requests }} /
+      {{ token_usage.totals.request_count }} 次文字模型调用。
+      接入计量器前的历史调用显示为“—”。
+    </p>
+  </section>
+</div>
+
+<section class="card" style="margin-top:20px">
+  <h2>每日自动生产</h2>
+  <p class="muted">
+    到点后自动选择具体主题、生成、润色、配图并推送到草稿箱；正式发布仍由你在公众号后台确认。
+  </p>
+  {% if automation_plans %}
+    {% for plan in automation_plans %}
+    <form method="post" action="/admin/automation-plans/{{ plan.id }}"
+          style="border-top:1px solid var(--line);padding-top:16px;margin-top:16px">
+      <div class="grid">
+        <div>
+          <label>计划名称</label>
+          <input name="name" value="{{ plan.name }}" required>
+          <label>内容大方向</label>
+          <textarea name="directions" required
+                    placeholder="例如：睡眠、日常饮食、适度运动；强调普通家庭可执行，不写疾病治疗。">{{ plan.directions }}</textarea>
+          <label>默认分类</label>
+          <input name="category" value="{{ plan.category }}" required>
+        </div>
+        <div>
+          <label>目标受众</label>
+          <select name="audience_slug">
+            {% for audience in audiences %}
+              {% if audience.enabled %}
+              <option value="{{ audience.slug }}"
+                      {% if audience.id == plan.audience_profile_id %}selected{% endif %}>
+                {{ audience.name }}
+              </option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <label>文字模型</label>
+          <select name="provider">
+            {% for value, label in [
+              ("deepseek", "DeepSeek"),
+              ("minimax", "MiniMax"),
+              ("kimi", "Kimi"),
+              ("mock", "本地 Mock")
+            ] %}
+            <option value="{{ value }}" {% if plan.provider == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <label>每日执行时间</label>
+          <input name="run_time" type="time" value="{{ plan.run_time }}" required>
+          <input name="timezone" type="hidden" value="{{ plan.timezone }}">
+          <label>标题吸睛程度</label>
+          <select name="headline_intensity">
+            {% for value in [1, 2, 3, 4, 5] %}
+            <option value="{{ value }}"
+                    {% if plan.headline_intensity == value %}selected{% endif %}>
+              {{ value }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <p>
+        <label style="display:inline-block;margin-right:18px">
+          <input type="checkbox" name="humanize" value="true"
+                 {% if plan.humanize %}checked{% endif %}
+                 style="width:auto;margin-right:6px">
+          自动润色
+        </label>
+        <label style="display:inline-block;margin-right:18px">
+          <input type="checkbox" name="auto_upload_draft" value="true"
+                 {% if plan.auto_upload_draft %}checked{% endif %}
+                 style="width:auto;margin-right:6px">
+          自动推送草稿箱
+        </label>
+        <label style="display:inline-block">
+          <input type="checkbox" name="enabled" value="true"
+                 {% if plan.enabled %}checked{% endif %}
+                 style="width:auto;margin-right:6px">
+          启用每日执行
+        </label>
+      </p>
+      <button type="submit">保存计划</button>
+      <button type="submit"
+              formaction="/admin/automation-plans/{{ plan.id }}/run-now"
+              style="background:#577465;margin-left:8px">
+        立即运行一次
+      </button>
+    </form>
+    {% endfor %}
+  {% else %}
+    <form method="post" action="/admin/automation-plans">
+      <div class="grid">
+        <div>
+          <label>计划名称</label>
+          <input name="name" value="每日内容计划" required>
+          <label>内容大方向</label>
+          <textarea name="directions" required
+                    placeholder="例如：睡眠、日常饮食、适度运动；强调普通家庭可执行，不写疾病治疗。"></textarea>
+          <label>默认分类</label>
+          <input name="category" value="日常养生" required>
+        </div>
+        <div>
+          <label>目标受众</label>
+          <select name="audience_slug">
+            {% for audience in audiences %}
+              {% if audience.enabled %}
+              <option value="{{ audience.slug }}">{{ audience.name }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <label>文字模型</label>
+          <select name="provider">
+            <option value="deepseek">DeepSeek</option>
+            <option value="minimax">MiniMax</option>
+            <option value="kimi">Kimi</option>
+            <option value="mock">本地 Mock</option>
+          </select>
+          <label>每日执行时间（北京时间）</label>
+          <input name="run_time" type="time" value="06:30" required>
+          <input name="timezone" type="hidden" value="Asia/Shanghai">
+          <label>标题吸睛程度</label>
+          <select name="headline_intensity">
+            <option value="3">3 — 标准传播</option>
+            <option value="4" selected>4 — 强吸引</option>
+            <option value="5">5 — 最大吸引</option>
+          </select>
+        </div>
+      </div>
+      <p>
+        <label style="display:inline-block;margin-right:18px">
+          <input type="checkbox" name="humanize" value="true" checked
+                 style="width:auto;margin-right:6px">
+          自动润色
+        </label>
+        <label style="display:inline-block;margin-right:18px">
+          <input type="checkbox" name="auto_upload_draft" value="true" checked
+                 style="width:auto;margin-right:6px">
+          自动推送草稿箱
+        </label>
+        <label style="display:inline-block">
+          <input type="checkbox" name="enabled" value="true" checked
+                 style="width:auto;margin-right:6px">
+          启用每日执行
+        </label>
+      </p>
+      <button type="submit">创建自动计划</button>
+    </form>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:20px">
+  <h2>自动任务记录</h2>
+  <table>
+    <thead>
+      <tr><th>计划时间</th><th>选题</th><th>状态</th><th>重试</th><th>文章</th></tr>
+    </thead>
+    <tbody>
+      {% for run in automation_runs %}
+      <tr>
+        <td>{{ run.scheduled_for.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>
+          {{ run.topic or "等待选题" }}
+          {% if run.error_message %}
+          <br><span class="muted">{{ run.error_message }}</span>
+          {% endif %}
+        </td>
+        <td>{{ run.status }}</td>
+        <td>{{ run.retry_count }}</td>
+        <td>
+          {% if run.article_id %}
+          <a href="/admin/articles/{{ run.article_id }}">查看</a>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">还没有自动任务记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card" style="margin-top:20px">
+  <h2>最近文章</h2>
+  <table>
+    <thead><tr><th>标题</th><th>模型</th><th>受众</th><th>状态</th><th>创建时间</th></tr></thead>
+    <tbody>
+      {% for article in articles %}
+      <tr>
+        <td><a href="/admin/articles/{{ article.id }}">{{ article.selected_title }}</a></td>
+        <td>{{ article.llm_provider }} / {{ article.model_name }}</td>
+        <td>{{ article.audience.name }}</td>
+        <td>{{ article.status }}</td>
+        <td>{{ article.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">还没有文章</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -94,6 +94,9 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+*.db
+generated-assets/
+comparison-results/
 
 # mypy
 .mypy_cache/

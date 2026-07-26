@@ -1,0 +1,236 @@
+import json
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+from app.config import Settings
+from app.models import AudienceProfile
+from app.services.generator import audience_to_context
+from app.services.humanizer import build_humanizer_prompt
+from app.services.images import MiniMaxImageProvider
+from app.services.llm import (
+    MockLLMProvider,
+    build_llm_provider,
+    parse_json_response,
+    parse_token_usage,
+)
+from app.services.prompts import build_article_prompt
+from app.services.renderer import render_wechat_html
+from app.services.safety import scan_article
+from app.services.wechat import WechatClient, WechatError
+
+
+def sample_audience() -> AudienceProfile:
+    return AudienceProfile(
+        id=1,
+        slug="middle-age-health",
+        name="中年健康管理",
+        age_range="35-55",
+        description="工作和家庭压力较大的人群",
+        interests_json=json.dumps(["睡眠", "职场压力"], ensure_ascii=False),
+        writing_style="节奏明快，强调可执行性",
+        title_preferences_json=json.dumps(
+            ["人到中年……", "每天坐8小时的人……"],
+            ensure_ascii=False,
+        ),
+        article_length=1000,
+        image_style="现代都市生活中的中国中年人物",
+        prohibited_topics_json=json.dumps(["建议停药"], ensure_ascii=False),
+        enabled=True,
+    )
+
+
+def test_audience_context_is_dynamic():
+    context = audience_to_context(sample_audience())
+    assert context["name"] == "中年健康管理"
+    assert context["age_range"] == "35-55"
+    assert context["interests"] == ["睡眠", "职场压力"]
+
+
+def test_prompt_contains_selected_audience():
+    context = audience_to_context(sample_audience())
+    prompt = build_article_prompt(
+        topic="改善久坐带来的疲劳",
+        category="职场健康",
+        audience=context,
+        title_count=5,
+        image_count=3,
+    )
+    assert "中年健康管理" in prompt
+    assert "35-55" in prompt
+    assert "人到中年" in prompt
+
+
+def test_prompt_applies_headline_intensity():
+    context = audience_to_context(sample_audience())
+    prompt = build_article_prompt(
+        topic="改善久坐带来的疲劳",
+        category="职场健康",
+        audience=context,
+        title_count=5,
+        image_count=3,
+        headline_intensity=5,
+    )
+    assert "标题吸睛程度：5/5" in prompt
+    assert "信息缺口" in prompt
+    assert "不得编造数字" in prompt
+
+
+def test_humanizer_prompt_preserves_structure_and_removes_ai_patterns():
+    prompt = build_humanizer_prompt(
+        {
+            "title_candidates": ["标题一"],
+            "selected_title": "标题一",
+            "summary": "此外，这是一个至关重要的习惯。",
+            "opening": "值得注意的是，睡眠十分重要。",
+            "sections": [{"heading": "建议", "paragraphs": ["第一，早点睡。"]}],
+            "conclusion": "总而言之，未来可期。",
+            "image_prompts": [{"position": 0, "prompt": "图片"}],
+        }
+    )
+    assert "Humanizer-zh" in prompt
+    assert "title_candidates、selected_title 和 image_prompts 原样保留" in prompt
+    assert "机械连接词" in prompt
+    assert "不虚构个人经历" in prompt
+    assert "目标至少 45/50" in prompt
+
+
+def test_mock_generation_and_rendering():
+    context = audience_to_context(sample_audience())
+    result = MockLLMProvider().generate_article(
+        "prompt",
+        {
+            "topic": "改善久坐带来的疲劳",
+            "category": "职场健康",
+            "audience": context,
+            "title_count": 5,
+            "image_count": 3,
+        },
+    )
+    assert len(result["title_candidates"]) == 5
+    assert len(result["image_prompts"]) == 3
+    html = render_wechat_html(result, ["cover.png", "one.png", "two.png"])
+    assert result["sections"][0]["heading"] in html
+    assert "one.png" in html
+
+
+def test_mock_headline_changes_with_intensity():
+    context = audience_to_context(sample_audience())
+    base_context = {
+        "topic": "改善久坐带来的疲劳",
+        "category": "职场健康",
+        "audience": context,
+        "title_count": 5,
+        "image_count": 1,
+    }
+    calm = MockLLMProvider().generate_article(
+        "prompt",
+        {**base_context, "headline_intensity": 1},
+    )
+    strong = MockLLMProvider().generate_article(
+        "prompt",
+        {**base_context, "headline_intensity": 5},
+    )
+    assert calm["selected_title"] != strong["selected_title"]
+    assert "提醒家里人" in strong["selected_title"]
+
+
+def test_safety_scan_blocks_high_risk_claims():
+    flags = scan_article("每天吃一片，不用吃药，也能彻底治愈。")
+    assert "包含绝对治疗承诺" in flags
+    assert "可能诱导停止或替代正规治疗" in flags
+
+
+def test_parse_json_response_handles_reasoning_and_markdown():
+    content = """<think>先规划文章结构</think>
+```json
+{"selected_title": "晚饭后的三个小习惯"}
+```"""
+    assert parse_json_response(content) == {
+        "selected_title": "晚饭后的三个小习惯"
+    }
+
+
+def test_kimi_uses_required_temperature():
+    provider = build_llm_provider(
+        Settings(moonshot_api_key="test-key"),
+        "kimi",
+    )
+    assert provider.temperature == 1
+
+
+def test_token_usage_supports_openai_and_alias_fields():
+    assert parse_token_usage(
+        {
+            "usage": {
+                "prompt_tokens": 120,
+                "completion_tokens": 80,
+                "total_tokens": 200,
+            }
+        }
+    ).total_tokens == 200
+    aliased = parse_token_usage(
+        {"usage": {"input_tokens": 25, "output_tokens": 15}}
+    )
+    assert aliased.prompt_tokens == 25
+    assert aliased.completion_tokens == 15
+    assert aliased.total_tokens == 40
+
+
+def test_minimax_images_keep_aigc_watermark_by_default(monkeypatch, tmp_path: Path):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": {"image_base64": ["anBlZw=="]}}
+
+    def fake_post(url, *, headers, json, timeout):
+        captured.update(json)
+        return FakeResponse()
+
+    monkeypatch.setattr("app.services.images.httpx.post", fake_post)
+    provider = MiniMaxImageProvider(
+        Settings(
+            minimax_api_key="test-key",
+            generated_assets_dir=str(tmp_path),
+        )
+    )
+    generated = provider.generate("prompt", "title", 0)
+    assert captured["aigc_watermark"] is True
+    assert Path(str(generated["local_path"])).read_bytes() == b"jpeg"
+
+
+def test_wechat_draft_media_id_is_verified(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"news_item": [{"title": "已上传标题"}]}
+
+    monkeypatch.setattr(
+        "app.services.wechat.httpx.post",
+        lambda *args, **kwargs: FakeResponse(),
+    )
+    client = WechatClient(
+        Settings(
+            wechat_enabled=True,
+            wechat_app_id="app-id",
+            wechat_app_secret="secret",
+        )
+    )
+    client._token = "cached-token"
+    client._token_expires_at = datetime.now(UTC) + timedelta(minutes=5)
+    client.verify_draft("media-id", "已上传标题")
+
+    try:
+        client.verify_draft("media-id", "另一个标题")
+    except WechatError as exc:
+        assert "title mismatch" in str(exc)
+    else:
+        raise AssertionError("Expected title mismatch to fail verification")
