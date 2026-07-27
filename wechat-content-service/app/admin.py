@@ -4,15 +4,18 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
 from .database import get_db
 from .models import Article, AudienceProfile, AutomationPlan, AutomationRun
-from .repositories import update_audience
+from .repositories import create_audience, update_audience
 from .schemas import (
     ArticleGenerateRequest,
+    AudienceCreate,
     AudienceUpdate,
     AutomationPlanCreate,
 )
@@ -27,9 +30,7 @@ templates = Jinja2Templates(directory="templates")
 
 @router.get("/admin", response_class=HTMLResponse)
 def admin_home(request: Request, session: Session = Depends(get_db)):
-    audiences = session.scalars(
-        select(AudienceProfile).order_by(AudienceProfile.id)
-    ).all()
+    audiences = session.scalars(select(AudienceProfile).order_by(AudienceProfile.id)).all()
     articles = session.scalars(
         select(Article)
         .options(selectinload(Article.audience))
@@ -42,9 +43,7 @@ def admin_home(request: Request, session: Session = Depends(get_db)):
         .order_by(AutomationPlan.id)
     ).all()
     automation_runs = session.scalars(
-        select(AutomationRun)
-        .order_by(AutomationRun.created_at.desc())
-        .limit(15)
+        select(AutomationRun).order_by(AutomationRun.created_at.desc()).limit(15)
     ).all()
     return templates.TemplateResponse(
         request=request,
@@ -55,7 +54,67 @@ def admin_home(request: Request, session: Session = Depends(get_db)):
             "token_usage": token_usage_summary(session),
             "automation_plans": automation_plans,
             "automation_runs": automation_runs,
+            "audience_created": request.query_params.get("audience_created"),
         },
+    )
+
+
+@router.get("/admin/audiences/new", response_class=HTMLResponse)
+def new_audience_form(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="audience_new.html",
+        context={
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@router.post("/admin/audiences")
+def create_audience_from_form(
+    slug: str = Form(),
+    name: str = Form(),
+    age_range: str = Form(),
+    description: str = Form(""),
+    interests: str = Form(""),
+    writing_style: str = Form(""),
+    title_preferences: str = Form(""),
+    article_length: int = Form(1200),
+    image_style: str = Form(""),
+    prohibited_topics: str = Form(""),
+    enabled: bool = Form(False),
+    session: Session = Depends(get_db),
+):
+    try:
+        data = AudienceCreate(
+            slug=slug.strip().lower(),
+            name=name,
+            age_range=age_range,
+            description=description,
+            interests=_lines(interests),
+            writing_style=writing_style,
+            title_preferences=_lines(title_preferences),
+            article_length=article_length,
+            image_style=image_style,
+            prohibited_topics=_lines(prohibited_topics),
+            enabled=enabled,
+        )
+    except ValidationError:
+        return RedirectResponse(
+            f"/admin/audiences/new?error={quote('表单内容不符合要求，请检查唯一标识和字数')}",
+            status_code=303,
+        )
+    try:
+        audience = create_audience(session, data)
+    except IntegrityError:
+        session.rollback()
+        return RedirectResponse(
+            f"/admin/audiences/new?error={quote('该唯一标识已存在，请换一个')}",
+            status_code=303,
+        )
+    return RedirectResponse(
+        f"/admin?audience_created={quote(audience.name)}",
+        status_code=303,
     )
 
 
@@ -74,12 +133,8 @@ def audience_form(
         context={
             "audience": audience,
             "interests": "\n".join(json.loads(audience.interests_json)),
-            "title_preferences": "\n".join(
-                json.loads(audience.title_preferences_json)
-            ),
-            "prohibited_topics": "\n".join(
-                json.loads(audience.prohibited_topics_json)
-            ),
+            "title_preferences": "\n".join(json.loads(audience.title_preferences_json)),
+            "prohibited_topics": "\n".join(json.loads(audience.prohibited_topics_json)),
         },
     )
 
@@ -131,13 +186,13 @@ def generate_from_form(
     category: str = Form("日常养生"),
     audience_slug: str = Form("senior-wellness"),
     provider: str = Form("mock"),
+    target_length: int = Form(0),
     headline_intensity: int = Form(4),
     humanize: bool = Form(False),
+    auto_upload_draft: bool = Form(False),
     session: Session = Depends(get_db),
 ):
-    audience = session.scalar(
-        select(AudienceProfile).where(AudienceProfile.slug == audience_slug)
-    )
+    audience = session.scalar(select(AudienceProfile).where(AudienceProfile.slug == audience_slug))
     if not audience:
         raise HTTPException(status_code=404, detail="Audience not found")
     article = generate_article(
@@ -147,12 +202,30 @@ def generate_from_form(
             category=category,
             audience_slug=audience_slug,
             provider=provider,
+            target_length=target_length or None,
             headline_intensity=headline_intensity,
             humanize=humanize,
         ),
         audience,
         settings,
     )
+    if auto_upload_draft:
+        try:
+            media_id, message = upload_article_to_draft(
+                session,
+                article,
+                settings,
+            )
+        except Exception as exc:  # noqa: BLE001 - show upload result on article page
+            return RedirectResponse(
+                f"/admin/articles/{article.id}?draft_error={quote(str(exc))}",
+                status_code=303,
+            )
+        detail = quote(f"{message}; media_id={media_id}")
+        return RedirectResponse(
+            f"/admin/articles/{article.id}?draft_message={detail}",
+            status_code=303,
+        )
     return RedirectResponse(f"/admin/articles/{article.id}", status_code=303)
 
 
@@ -165,6 +238,7 @@ def _automation_values(
     provider: str,
     run_time: str,
     timezone: str,
+    target_length: int,
     headline_intensity: int,
     humanize: bool,
     auto_upload_draft: bool,
@@ -178,6 +252,7 @@ def _automation_values(
         provider=provider,
         run_time=run_time,
         timezone=timezone,
+        target_length=target_length or None,
         headline_intensity=headline_intensity,
         humanize=humanize,
         auto_upload_draft=auto_upload_draft,
@@ -194,6 +269,7 @@ def create_automation_plan_from_form(
     provider: str = Form("deepseek"),
     run_time: str = Form("06:30"),
     timezone: str = Form("Asia/Shanghai"),
+    target_length: int = Form(0),
     headline_intensity: int = Form(4),
     humanize: bool = Form(False),
     auto_upload_draft: bool = Form(False),
@@ -208,6 +284,7 @@ def create_automation_plan_from_form(
         provider=provider,
         run_time=run_time,
         timezone=timezone,
+        target_length=target_length,
         headline_intensity=headline_intensity,
         humanize=humanize,
         auto_upload_draft=auto_upload_draft,
@@ -237,6 +314,7 @@ def update_automation_plan_from_form(
     provider: str = Form("deepseek"),
     run_time: str = Form("06:30"),
     timezone: str = Form("Asia/Shanghai"),
+    target_length: int = Form(0),
     headline_intensity: int = Form(4),
     humanize: bool = Form(False),
     auto_upload_draft: bool = Form(False),
@@ -254,6 +332,7 @@ def update_automation_plan_from_form(
         provider=provider,
         run_time=run_time,
         timezone=timezone,
+        target_length=target_length,
         headline_intensity=headline_intensity,
         humanize=humanize,
         auto_upload_draft=auto_upload_draft,
@@ -293,9 +372,7 @@ def upload_article_draft_from_form(
     session: Session = Depends(get_db),
 ):
     article = session.scalar(
-        select(Article)
-        .where(Article.id == article_id)
-        .options(selectinload(Article.assets))
+        select(Article).where(Article.id == article_id).options(selectinload(Article.assets))
     )
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")

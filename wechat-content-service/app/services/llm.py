@@ -116,13 +116,8 @@ class MockLLMProvider(LLMProvider):
                 f"坚持不难：把{topic}拆成每天能做到的小事",
             ]
             if headline_intensity == 5:
-                title_templates[0] = (
-                    f"提醒家里人：过了{age_label}岁做{topic}，"
-                    "很多人第一步就错了"
-                )
-                title_templates[1] = (
-                    f"同样是{topic}，为什么有人轻松坚持？关键藏在这3点"
-                )
+                title_templates[0] = f"提醒家里人：过了{age_label}岁做{topic}，很多人第一步就错了"
+                title_templates[1] = f"同样是{topic}，为什么有人轻松坚持？关键藏在这3点"
         titles = title_templates[:title_count]
 
         sections = [
@@ -165,6 +160,7 @@ class MockLLMProvider(LLMProvider):
                     f"{audience['image_style']}，主题为“{topic}”，"
                     "温暖自然、真实生活场景、横向构图、无文字、无医疗器械特写"
                 ),
+                "search_query": topic,
             }
             for index in range(image_count)
         ]
@@ -194,9 +190,7 @@ class MockLLMProvider(LLMProvider):
         self.usage = TokenUsage()
         direction_match = re.search(r"内容方向：\s*(.+)", prompt)
         direction = (
-            direction_match.group(1).splitlines()[0].strip()
-            if direction_match
-            else "健康生活"
+            direction_match.group(1).splitlines()[0].strip() if direction_match else "健康生活"
         )
         candidates = [
             f"{direction}：今天可以开始的三个生活小习惯",
@@ -253,9 +247,7 @@ class ChatProviderConfig:
 class CompatibleChatProvider(LLMProvider):
     def __init__(self, config: ChatProviderConfig, timeout: float):
         if not config.api_base or not config.api_key or not config.model:
-            raise LLMError(
-                f"{config.name} is not configured. Fill {config.key_env} in .env"
-            )
+            raise LLMError(f"{config.name} is not configured. Fill {config.key_env} in .env")
         self.name = config.name
         self.api_base = config.api_base.rstrip("/")
         self.api_key = config.api_key
@@ -271,9 +263,7 @@ class CompatibleChatProvider(LLMProvider):
     def generate_article(self, prompt: str, context: dict[str, Any]) -> dict[str, Any]:
         return self.generate_json(
             prompt,
-            system_prompt=(
-                "你是微信公众号内容编辑。只输出合法 JSON，不要输出 Markdown。"
-            ),
+            system_prompt=("你是微信公众号内容编辑。只输出合法 JSON，不要输出 Markdown。"),
         )
 
     def generate_json(

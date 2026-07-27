@@ -28,6 +28,7 @@ def article_dict(article: Article) -> dict:
         "audience_profile_id": article.audience_profile_id,
         "topic": article.topic,
         "category": article.category,
+        "target_length": article.target_length,
         "title_candidates": json.loads(article.title_candidates_json),
         "selected_title": article.selected_title,
         "summary": article.summary,
@@ -50,6 +51,11 @@ def article_dict(article: Article) -> dict:
                 "prompt": asset.prompt,
                 "local_path": asset.local_path,
                 "source_url": asset.source_url,
+                "source_kind": asset.source_kind,
+                "source_page_url": asset.source_page_url,
+                "source_author": asset.source_author,
+                "license_name": asset.license_name,
+                "license_url": asset.license_url,
                 "wechat_url": asset.wechat_url,
             }
             for asset in sorted(article.assets, key=lambda item: item.position)
@@ -70,6 +76,7 @@ def automation_plan_dict(plan: AutomationPlan) -> dict:
         "timezone": plan.timezone,
         "title_count": plan.title_count,
         "image_count": plan.image_count,
+        "target_length": plan.target_length,
         "headline_intensity": plan.headline_intensity,
         "humanize": plan.humanize,
         "auto_upload_draft": plan.auto_upload_draft,

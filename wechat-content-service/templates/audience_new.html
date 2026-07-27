@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}添加目标受众{% endblock %}
+{% block content %}
+<h1>添加目标受众</h1>
+<p class="muted">
+  新受众启用后，会立即出现在文章生成和每日自动计划的目标受众选项中。
+</p>
+
+{% if error %}
+<p style="padding:10px 12px;background:#fff0ec;color:#9a3f2d;border-radius:8px">
+  {{ error }}
+</p>
+{% endif %}
+
+<form class="card" method="post" action="/admin/audiences">
+  <label for="slug">唯一标识</label>
+  <input id="slug" name="slug" required minlength="2" maxlength="80"
+         pattern="[a-z0-9-]+"
+         placeholder="例如：young-family-health">
+  <p class="muted">仅使用英文小写字母、数字和短横线，创建后不建议修改。</p>
+
+  <label for="name">画像名称</label>
+  <input id="name" name="name" required maxlength="120"
+         placeholder="例如：年轻家庭健康">
+
+  <label for="age_range">年龄范围</label>
+  <input id="age_range" name="age_range" required maxlength="40"
+         placeholder="例如：25-40">
+
+  <label for="description">受众描述</label>
+  <textarea id="description" name="description"
+            placeholder="描述生活阶段、主要需求和阅读习惯"></textarea>
+
+  <label for="interests">关注领域（每行一个）</label>
+  <textarea id="interests" name="interests"
+            placeholder="睡眠&#10;家庭饮食&#10;亲子运动"></textarea>
+
+  <label for="writing_style">写作风格</label>
+  <textarea id="writing_style" name="writing_style"
+            placeholder="例如：自然、简洁、重视家庭场景和可执行建议"></textarea>
+
+  <label for="title_preferences">标题偏好（每行一个）</label>
+  <textarea id="title_preferences" name="title_preferences"
+            placeholder="例如：有孩子的家庭……&#10;下班后坚持这几个习惯……"></textarea>
+
+  <label for="article_length">默认目标字数</label>
+  <input id="article_length" type="number" min="300" max="5000"
+         name="article_length" value="1200" required>
+
+  <label for="image_style">图片风格</label>
+  <textarea id="image_style" name="image_style"
+            placeholder="例如：真实自然的中国年轻家庭生活场景"></textarea>
+
+  <label for="prohibited_topics">禁止主题（每行一个）</label>
+  <textarea id="prohibited_topics" name="prohibited_topics"
+            placeholder="宣称治愈疾病&#10;建议停药&#10;制造健康焦虑"></textarea>
+
+  <label>
+    <input style="width:auto" type="checkbox" name="enabled" value="true" checked>
+    创建后立即启用
+  </label>
+
+  <p>
+    <button type="submit">添加目标受众</button>
+    <a class="button" href="/admin" style="background:#718078;margin-left:8px">取消</a>
+  </p>
+</form>
+{% endblock %}

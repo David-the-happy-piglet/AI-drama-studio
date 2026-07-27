@@ -58,9 +58,7 @@ def _validate_timezone(name: str) -> None:
 
 def get_article_or_404(session: Session, article_id: int) -> Article:
     article = session.scalar(
-        select(Article)
-        .where(Article.id == article_id)
-        .options(selectinload(Article.assets))
+        select(Article).where(Article.id == article_id).options(selectinload(Article.assets))
     )
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
@@ -69,9 +67,7 @@ def get_article_or_404(session: Session, article_id: int) -> Article:
 
 @router.get("/audiences", response_model=list[AudienceRead])
 def list_audiences(session: Session = Depends(get_db)):
-    audiences = session.scalars(
-        select(AudienceProfile).order_by(AudienceProfile.id)
-    ).all()
+    audiences = session.scalars(select(AudienceProfile).order_by(AudienceProfile.id)).all()
     return [audience_dict(item) for item in audiences]
 
 
@@ -104,9 +100,7 @@ def edit_audience(
 @router.get("/articles", response_model=list[ArticleRead])
 def list_articles(session: Session = Depends(get_db)):
     articles = session.scalars(
-        select(Article)
-        .options(selectinload(Article.assets))
-        .order_by(Article.created_at.desc())
+        select(Article).options(selectinload(Article.assets)).order_by(Article.created_at.desc())
     ).all()
     return [article_dict(item) for item in articles]
 
@@ -117,16 +111,28 @@ def list_providers():
         "text": provider_catalog(settings),
         "image": {
             "provider": settings.image_provider,
+            "source_mode": settings.image_source_mode,
+            "web_provider": (
+                settings.web_image_provider
+                if settings.image_source_mode in {"mixed", "web"}
+                else None
+            ),
             "model": (
                 settings.minimax_image_model
                 if settings.image_provider == "minimax"
                 else settings.image_model or "local-placeholder"
             ),
             "configured": (
-                bool(settings.minimax_api_key)
-                if settings.image_provider == "minimax"
-                else settings.image_provider == "placeholder"
-                or bool(settings.image_api_key)
+                (
+                    bool(settings.minimax_api_key)
+                    if settings.image_provider == "minimax"
+                    else settings.image_provider == "placeholder" or bool(settings.image_api_key)
+                )
+                and (
+                    settings.web_image_provider in {"openverse", "wikimedia"}
+                    if settings.image_source_mode in {"mixed", "web"}
+                    else True
+                )
             ),
         },
     }

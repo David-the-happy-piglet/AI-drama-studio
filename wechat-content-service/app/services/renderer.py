@@ -13,8 +13,10 @@ def _paragraph(text: str) -> str:
 def render_wechat_html(
     article: dict[str, Any],
     asset_urls: list[str] | None = None,
+    asset_credits: list[dict[str, str | None]] | None = None,
 ) -> str:
     asset_urls = asset_urls or []
+    asset_credits = asset_credits or []
     html: list[str] = [
         (
             '<section style="max-width:680px;margin:0 auto;padding:8px 12px;'
@@ -42,15 +44,35 @@ def render_wechat_html(
             html.append(_paragraph(paragraph))
 
     html.append(
-        '<section style="background:#f4f8f5;border-radius:8px;'
-        'padding:12px 16px;margin-top:26px;">'
+        '<section style="background:#f4f8f5;border-radius:8px;padding:12px 16px;margin-top:26px;">'
     )
     html.append(_paragraph(article.get("conclusion", "")))
     html.append("</section>")
-    html.append(
-        '<p style="font-size:13px;line-height:1.7;color:#8a958e;'
-        'margin:18px 0 6px;text-align:center;">'
-        "本文内容与配图含人工智能辅助生成。</p>"
-    )
+
+    web_credits = [item for item in asset_credits if item.get("source_kind") == "web"]
+    if web_credits:
+        html.append(
+            '<section style="font-size:12px;line-height:1.7;color:#8a958e;'
+            'margin:18px 0 6px;">'
+            "<p>图片来源与许可：</p>"
+        )
+        for credit in web_credits:
+            author = escape(credit.get("source_author") or "Wikimedia Commons")
+            source_url = escape(credit.get("source_page_url") or "")
+            license_name = escape(credit.get("license_name") or "开放许可")
+            license_url = escape(credit.get("license_url") or "")
+            author_html = (
+                f'<a href="{source_url}" style="color:#708078;">{author}</a>'
+                if source_url
+                else author
+            )
+            license_html = (
+                f'<a href="{license_url}" style="color:#708078;">{license_name}</a>'
+                if license_url
+                else license_name
+            )
+            html.append(f"<p>{author_html} · {license_html}</p>")
+        html.append("</section>")
+
     html.append("</section>")
     return "".join(html)

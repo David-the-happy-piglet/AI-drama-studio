@@ -35,9 +35,9 @@ def build_topic_prompt(
 {directions}
 
 默认分类：{category}
-目标受众：{audience['name']}（{audience['age_range']}岁）
-受众兴趣：{"、".join(audience['interests'])}
-禁止主题：{"、".join(audience['prohibited_topics'])}
+目标受众：{audience["name"]}（{audience["age_range"]}岁）
+受众兴趣：{"、".join(audience["interests"])}
+禁止主题：{"、".join(audience["prohibited_topics"])}
 
 近期已经使用的主题：
 {recent}
@@ -85,6 +85,7 @@ def build_article_prompt(
                 "position": 0,
                 "asset_type": "cover或inline",
                 "prompt": "无文字的中文图片生成提示词",
+                "search_query": "适合开放图库检索的2至5个英文关键词",
             }
         ],
     }
@@ -93,25 +94,27 @@ def build_article_prompt(
 
 主题：{topic}
 分类：{category}
-目标受众：{audience['name']}
-年龄范围：{audience['age_range']}
-受众描述：{audience['description']}
-关注领域：{"、".join(audience['interests'])}
-写作风格：{audience['writing_style']}
-标题偏好：{"；".join(audience['title_preferences'])}
+目标受众：{audience["name"]}
+年龄范围：{audience["age_range"]}
+受众描述：{audience["description"]}
+关注领域：{"、".join(audience["interests"])}
+写作风格：{audience["writing_style"]}
+标题偏好：{"；".join(audience["title_preferences"])}
 标题吸睛程度：{headline_intensity}/5
 标题策略：{headline_guidance}
-目标长度：约{audience['article_length']}字
-图片风格：{audience['image_style']}
-禁止主题：{"、".join(audience['prohibited_topics'])}
+目标长度：约{audience["article_length"]}字
+图片风格：{audience["image_style"]}
+禁止主题：{"、".join(audience["prohibited_topics"])}
 
 要求：
 1. 按上述吸睛程度生成{title_count}个明显不同的标题。
    无论等级多高，都不得编造数字、虚构权威、夸大风险、承诺治愈或让标题与正文不符。
 2. 选择其中最适合微信公众号传播的一个标题。
 3. 正文语言简单，段落短，给出容易执行的建议。
+   正文主体尽量控制在目标长度的 90% 到 110%，根据篇幅调整小标题和段落数量。
 4. 不诊断疾病，不建议停药，不提供具体药物剂量，不虚构医生或患者。
-5. 生成{image_count}个无文字图片提示词，第一张为封面。
+5. 生成{image_count}个无文字图片提示词，第一张为封面；每张同时提供2至5个
+   准确、具体、适合开放图库检索的英文 search_query 关键词。
 6. 只返回 JSON，不要 Markdown。
 
 返回结构：

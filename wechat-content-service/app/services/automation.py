@@ -60,9 +60,7 @@ def enqueue_due_plans(
     now = now or datetime.now(UTC)
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)
-    plans = session.scalars(
-        select(AutomationPlan).where(AutomationPlan.enabled.is_(True))
-    ).all()
+    plans = session.scalars(select(AutomationPlan).where(AutomationPlan.enabled.is_(True))).all()
     created: list[int] = []
     for plan in plans:
         local_date = now.astimezone(_timezone(plan.timezone)).date()
@@ -171,9 +169,7 @@ def _choose_topic(
     started = datetime.now(UTC)
     result = llm.generate_json(
         prompt,
-        system_prompt=(
-            "你是谨慎的微信公众号选题编辑。只输出合法 JSON，不要输出 Markdown。"
-        ),
+        system_prompt=("你是谨慎的微信公众号选题编辑。只输出合法 JSON，不要输出 Markdown。"),
     )
     for key in ("topic", "category", "rationale"):
         if not isinstance(result.get(key), str) or not result[key].strip():
@@ -206,9 +202,7 @@ def execute_automation_run(
         select(AutomationRun)
         .where(AutomationRun.id == run_id)
         .options(
-            selectinload(AutomationRun.plan).selectinload(
-                AutomationPlan.audience
-            ),
+            selectinload(AutomationRun.plan).selectinload(AutomationPlan.audience),
             selectinload(AutomationRun.article).selectinload(Article.assets),
         )
     )
@@ -217,9 +211,9 @@ def execute_automation_run(
     plan = run.plan
 
     if not run.article_id:
-        local_date = _as_utc(run.scheduled_for).astimezone(
-            _timezone(plan.timezone)
-        ).date().isoformat()
+        local_date = (
+            _as_utc(run.scheduled_for).astimezone(_timezone(plan.timezone)).date().isoformat()
+        )
         topic_result, topic_generation = _choose_topic(
             session,
             plan,
@@ -234,6 +228,7 @@ def execute_automation_run(
                 category=topic_result.get("category") or plan.category,
                 title_count=plan.title_count,
                 image_count=plan.image_count,
+                target_length=plan.target_length,
                 headline_intensity=plan.headline_intensity,
                 humanize=plan.humanize,
                 provider=plan.provider,

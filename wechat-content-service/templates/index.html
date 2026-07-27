@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>内容控制台</h1>
+{% if audience_created %}
+<p style="padding:10px 12px;background:#edf7ef;color:#25613f;border-radius:8px">
+  已添加目标受众：{{ audience_created }}
+</p>
+{% endif %}
 <div class="grid">
   <section class="card">
     <h2>生成文章</h2>
@@ -24,6 +29,14 @@
         <option value="kimi">Kimi（kimi-k3）</option>
         <option value="mock">本地 Mock（无需 API Key）</option>
       </select>
+      <label for="target_length">文章篇幅</label>
+      <select id="target_length" name="target_length">
+        <option value="0" selected>跟随受众画像默认字数</option>
+        <option value="800">短篇 — 约 800 字</option>
+        <option value="1200">标准 — 约 1200 字</option>
+        <option value="1800">长篇 — 约 1800 字</option>
+        <option value="2500">深度 — 约 2500 字</option>
+      </select>
       <label for="headline_intensity">标题吸睛程度</label>
       <select id="headline_intensity" name="headline_intensity">
         <option value="1">1 — 克制可信</option>
@@ -43,12 +56,21 @@
       <p class="muted">
         减少机械排比、AI 高频词和模板化结尾；会增加一次文字模型调用。
       </p>
+      <label>
+        <input type="checkbox" name="auto_upload_draft" value="true"
+               style="width:auto;margin-right:8px">
+        生成完成后立即推送到公众号草稿箱
+      </label>
+      <p class="muted">
+        推送后会核验微信返回的 media_id；不会自动正式发布。
+      </p>
       <p><button type="submit">生成文章</button></p>
     </form>
   </section>
 
   <section class="card">
     <h2>受众画像</h2>
+    <p><a class="button" href="/admin/audiences/new">添加目标受众</a></p>
     {% for audience in audiences %}
       <p>
         <strong>{{ audience.name }}</strong>
@@ -139,6 +161,23 @@
           <label>每日执行时间</label>
           <input name="run_time" type="time" value="{{ plan.run_time }}" required>
           <input name="timezone" type="hidden" value="{{ plan.timezone }}">
+          <label>文章篇幅</label>
+          <select name="target_length">
+            <option value="0" {% if not plan.target_length %}selected{% endif %}>
+              跟随受众画像默认字数
+            </option>
+            {% for value, label in [
+              (800, "短篇 — 约 800 字"),
+              (1200, "标准 — 约 1200 字"),
+              (1800, "长篇 — 约 1800 字"),
+              (2500, "深度 — 约 2500 字")
+            ] %}
+            <option value="{{ value }}"
+                    {% if plan.target_length == value %}selected{% endif %}>
+              {{ label }}
+            </option>
+            {% endfor %}
+          </select>
           <label>标题吸睛程度</label>
           <select name="headline_intensity">
             {% for value in [1, 2, 3, 4, 5] %}
@@ -209,6 +248,14 @@
           <label>每日执行时间（北京时间）</label>
           <input name="run_time" type="time" value="06:30" required>
           <input name="timezone" type="hidden" value="Asia/Shanghai">
+          <label>文章篇幅</label>
+          <select name="target_length">
+            <option value="0" selected>跟随受众画像默认字数</option>
+            <option value="800">短篇 — 约 800 字</option>
+            <option value="1200">标准 — 约 1200 字</option>
+            <option value="1800">长篇 — 约 1800 字</option>
+            <option value="2500">深度 — 约 2500 字</option>
+          </select>
           <label>标题吸睛程度</label>
           <select name="headline_intensity">
             <option value="3">3 — 标准传播</option>
@@ -273,7 +320,11 @@
 <section class="card" style="margin-top:20px">
   <h2>最近文章</h2>
   <table>
-    <thead><tr><th>标题</th><th>模型</th><th>受众</th><th>状态</th><th>创建时间</th></tr></thead>
+    <thead>
+      <tr>
+        <th>标题</th><th>模型</th><th>受众</th><th>状态</th><th>创建时间</th><th>草稿箱操作</th>
+      </tr>
+    </thead>
     <tbody>
       {% for article in articles %}
       <tr>
@@ -282,9 +333,24 @@
         <td>{{ article.audience.name }}</td>
         <td>{{ article.status }}</td>
         <td>{{ article.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>
+          {% if article.status == "needs_review" %}
+          <button type="button" disabled
+                  style="background:#9aa59e;cursor:not-allowed;padding:7px 10px">
+            需先审核
+          </button>
+          {% else %}
+          <form method="post" action="/admin/articles/{{ article.id }}/wechat-draft"
+                style="margin:0">
+            <button type="submit" style="padding:7px 10px;white-space:nowrap">
+              {% if article.wechat_media_id %}重新核验{% else %}推送草稿箱{% endif %}
+            </button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="muted">还没有文章</td></tr>
+      <tr><td colspan="6" class="muted">还没有文章</td></tr>
       {% endfor %}
     </tbody>
   </table>

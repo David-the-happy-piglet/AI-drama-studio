@@ -5,6 +5,7 @@
 <p>
   <span class="tag">{{ article.audience.name }}</span>
   <span class="tag">{{ article.category }}</span>
+  <span class="tag">目标约 {{ article.target_length }} 字</span>
   <span class="tag">{{ article.status }}</span>
   <span class="tag">{{ article.llm_provider }} / {{ article.model_name }}</span>
 </p>
@@ -26,6 +27,24 @@
       <img src="{{ asset.source_url }}" alt="" style="width:100%;margin:8px 0;border-radius:8px">
       {% endif %}
       <p class="muted">{{ asset.prompt }}</p>
+      {% if asset.source_kind == "web" %}
+      <p class="muted">
+        网络图片：
+        {% if asset.source_page_url %}
+        <a href="{{ asset.source_page_url }}" target="_blank" rel="noopener">{{ asset.source_author or "查看来源" }}</a>
+        {% else %}
+        {{ asset.source_author or "来源待核对" }}
+        {% endif %}
+        {% if asset.license_name %}
+          ·
+          {% if asset.license_url %}
+          <a href="{{ asset.license_url }}" target="_blank" rel="noopener">{{ asset.license_name }}</a>
+          {% else %}
+          {{ asset.license_name }}
+          {% endif %}
+        {% endif %}
+      </p>
+      {% endif %}
     {% endfor %}
   </section>
   <section class="card">

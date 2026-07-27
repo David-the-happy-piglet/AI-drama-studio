@@ -13,4 +13,3 @@ os.environ["PUBLIC_BASE_URL"] = "http://testserver"
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["IMAGE_PROVIDER"] = "placeholder"
 os.environ["WECHAT_ENABLED"] = "false"
-

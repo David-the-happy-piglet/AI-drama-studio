@@ -50,5 +50,7 @@ def health():
         "status": "ok",
         "llm_provider": settings.llm_provider,
         "image_provider": settings.image_provider,
+        "image_source_mode": settings.image_source_mode,
+        "web_image_provider": settings.web_image_provider,
         "wechat_enabled": settings.wechat_enabled,
     }

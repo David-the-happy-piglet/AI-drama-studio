@@ -8,11 +8,12 @@
 
 ## 当前能力
 
-- 内置“中老年养生”和“中年健康管理”两套可编辑受众画像
+- 内置“中老年养生”和“中年健康管理”两套受众画像，支持在管理界面继续添加和编辑
 - 每篇文章生成多个候选标题并选择一个标题
 - 生成结构化正文、摘要和配图提示词
 - 使用统一模板渲染微信公众号 HTML
 - 默认生成本地占位图片，支持接入兼容的文生图 API
+- 支持 AI 配图与 Wikimedia Commons 开放许可图片混合使用
 - 原生支持 DeepSeek、MiniMax、Kimi，并保留兼容 `/chat/completions` 的通用接口
 - 支持同一主题一键生成三篇文章，便于比较标题、正文和排版质量
 - 支持 MiniMax `image-01` 生成统一风格的公众号横版配图
@@ -56,9 +57,33 @@ MOONSHOT_API_KEY=
 
 图片统一使用 MiniMax `image-01`，复用 `MINIMAX_API_KEY`。三篇文章使用同一个
 图片模型，能减少对文字模型质量判断的干扰。请求设置
-`aigc_watermark=true`，默认保留“AI生成”标识；公众号 HTML 末尾也会自动添加
-AI 辅助生成声明。只有在已经通过其他合规方式完成标识时，才应将
-`AIGC_WATERMARK=false`。
+`AIGC_WATERMARK=false`，新生成图片不附加 MiniMax 水印；公众号 HTML 末尾也不
+额外添加 AI 辅助生成声明。开启公开自动发布前，应根据适用的平台规则和法规重新确认
+AI 内容标识要求。
+
+### 混合使用 AI 与网络图片
+
+推荐使用下面的配置：
+
+```dotenv
+IMAGE_PROVIDER=minimax
+IMAGE_SOURCE_MODE=mixed
+WEB_IMAGE_PROVIDER=openverse
+WEB_IMAGE_FALLBACK_TO_AI=true
+WEB_IMAGE_USER_AGENT=ContentGenerator/0.1
+```
+
+`mixed` 模式保留 AI 封面，并让后续正文图片在 AI 与开放图库之间
+交替选择。网络搜索没有合适结果、下载失败或许可不符合要求时，会自动回退到
+`IMAGE_PROVIDER`，避免整篇文章生成失败。也可以使用 `ai` 强制全部走文生图，或使用
+`web` 强制全部走开放图库。
+
+系统优先通过 Openverse 搜索，Wikimedia Commons 作为备用来源，只接受 JPEG/PNG
+且许可标记为 Public Domain、CC0、CC BY 或 CC BY-SA 的图片；图片会下载到本地素材
+目录，不直接热链。作者、许可名称、许可链接和原始文件页会保存到数据库，并自动写入
+公众号 HTML 的图片来源说明。正式运营前建议将
+`WEB_IMAGE_USER_AGENT` 改为包含你的网站或联系邮箱的明确标识，并在发布前人工核对
+人物肖像、商标和每张图片文件页上的额外限制。
 
 本地启动：
 
@@ -89,6 +114,11 @@ python scripts/generate_comparison.py \
 高等级仍禁止编造数字、虚构权威、恐吓、治愈承诺及题文不符。API 请求使用
 `headline_intensity` 参数；三模型对比命令可以追加
 `--headline-intensity 5`。
+
+生成页面和每日自动计划都可以单独选择文章篇幅：短篇约 800 字、标准约 1200 字、
+长篇约 1800 字或深度约 2500 字。不指定时沿用受众画像中的默认字数；API 使用
+`target_length`，允许范围为 300–5000 字。目标字数会保存到文章记录，模型提示词会
+要求正文尽量控制在目标长度的 90%–110%。
 
 默认启用 `Humanizer-zh` 二次润色。模型先生成结构化文章，再进行一次专门的中文编辑，
 减少机械排比、AI 高频词、空泛总结和模板化结尾，同时锁定标题、健康事实与图片提示词。
@@ -247,6 +277,8 @@ docker compose up --build -d
 
 文章详情页提供“一键上传到公众号草稿箱”。微信返回 `media_id` 后，系统会调用
 `/cgi-bin/draft/get` 再次读取草稿并核对标题；核验成功后状态为 `wechat_draft`。
+手动生成文章时也可以勾选“生成完成后立即推送到公众号草稿箱”，让生成、配图和草稿
+上传在同一次操作中完成；该选项只创建并核验草稿，不调用正式发布接口。
 
 ## 本地开发
 

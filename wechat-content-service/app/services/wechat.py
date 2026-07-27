@@ -43,17 +43,12 @@ class WechatClient:
             request_id = data.get("rid")
             suffix = f", rid={request_id}" if request_id else ""
             raise WechatError(
-                f"WeChat API error {data.get('errcode')}: "
-                f"{data.get('errmsg')}{suffix}"
+                f"WeChat API error {data.get('errcode')}: {data.get('errmsg')}{suffix}"
             )
         return data
 
     def access_token(self) -> str:
-        if (
-            self._token
-            and self._token_expires_at
-            and datetime.now(UTC) < self._token_expires_at
-        ):
+        if self._token and self._token_expires_at and datetime.now(UTC) < self._token_expires_at:
             return self._token
         if not self.settings.wechat_app_id or not self.settings.wechat_app_secret:
             raise WechatError("WECHAT_APP_ID and WECHAT_APP_SECRET are required")
@@ -169,9 +164,7 @@ class WechatClient:
         draft = self.get_draft(media_id)
         items = draft.get("news_item")
         if not isinstance(items, list) or not items:
-            raise WechatError(
-                f"WeChat draft verification returned no articles for {media_id}"
-            )
+            raise WechatError(f"WeChat draft verification returned no articles for {media_id}")
         title = items[0].get("title")
         if title != expected_title:
             raise WechatError(

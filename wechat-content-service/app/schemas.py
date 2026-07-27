@@ -49,11 +49,10 @@ class ArticleGenerateRequest(BaseModel):
     category: str = Field(default="日常养生", min_length=2, max_length=100)
     title_count: int = Field(default=5, ge=3, le=10)
     image_count: int = Field(default=3, ge=1, le=6)
+    target_length: int | None = Field(default=None, ge=300, le=5000)
     headline_intensity: int = Field(default=4, ge=1, le=5)
     humanize: bool = True
-    provider: Literal["mock", "compatible", "deepseek", "minimax", "kimi"] | None = (
-        None
-    )
+    provider: Literal["mock", "compatible", "deepseek", "minimax", "kimi"] | None = None
 
 
 class ArticleComparisonRequest(BaseModel):
@@ -62,11 +61,12 @@ class ArticleComparisonRequest(BaseModel):
     category: str = Field(default="日常养生", min_length=2, max_length=100)
     title_count: int = Field(default=5, ge=3, le=10)
     image_count: int = Field(default=3, ge=1, le=6)
+    target_length: int | None = Field(default=None, ge=300, le=5000)
     headline_intensity: int = Field(default=4, ge=1, le=5)
     humanize: bool = True
-    providers: list[
-        Literal["mock", "compatible", "deepseek", "minimax", "kimi"]
-    ] = Field(default_factory=lambda: ["deepseek", "minimax", "kimi"], min_length=1)
+    providers: list[Literal["mock", "compatible", "deepseek", "minimax", "kimi"]] = Field(
+        default_factory=lambda: ["deepseek", "minimax", "kimi"], min_length=1
+    )
 
 
 class AssetRead(BaseModel):
@@ -78,6 +78,11 @@ class AssetRead(BaseModel):
     prompt: str
     local_path: str | None
     source_url: str | None
+    source_kind: str
+    source_page_url: str | None
+    source_author: str | None
+    license_name: str | None
+    license_url: str | None
     wechat_url: str | None
 
 
@@ -86,6 +91,7 @@ class ArticleRead(BaseModel):
     audience_profile_id: int
     topic: str
     category: str
+    target_length: int
     title_candidates: list[str]
     selected_title: str
     summary: str
@@ -125,13 +131,12 @@ class AutomationPlanBase(BaseModel):
     audience_slug: str = "senior-wellness"
     directions: str = Field(min_length=2, max_length=5000)
     category: str = Field(default="日常养生", min_length=2, max_length=100)
-    provider: Literal["mock", "compatible", "deepseek", "minimax", "kimi"] = (
-        "deepseek"
-    )
+    provider: Literal["mock", "compatible", "deepseek", "minimax", "kimi"] = "deepseek"
     run_time: str = Field(default="06:30", pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
     timezone: str = Field(default="Asia/Shanghai", min_length=3, max_length=80)
     title_count: int = Field(default=5, ge=3, le=10)
     image_count: int = Field(default=3, ge=1, le=6)
+    target_length: int | None = Field(default=None, ge=300, le=5000)
     headline_intensity: int = Field(default=4, ge=1, le=5)
     humanize: bool = True
     auto_upload_draft: bool = True
@@ -147,9 +152,7 @@ class AutomationPlanUpdate(BaseModel):
     audience_slug: str | None = None
     directions: str | None = Field(default=None, min_length=2, max_length=5000)
     category: str | None = Field(default=None, min_length=2, max_length=100)
-    provider: Literal["mock", "compatible", "deepseek", "minimax", "kimi"] | None = (
-        None
-    )
+    provider: Literal["mock", "compatible", "deepseek", "minimax", "kimi"] | None = None
     run_time: str | None = Field(
         default=None,
         pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$",
@@ -157,6 +160,7 @@ class AutomationPlanUpdate(BaseModel):
     timezone: str | None = Field(default=None, min_length=3, max_length=80)
     title_count: int | None = Field(default=None, ge=3, le=10)
     image_count: int | None = Field(default=None, ge=1, le=6)
+    target_length: int | None = Field(default=None, ge=300, le=5000)
     headline_intensity: int | None = Field(default=None, ge=1, le=5)
     humanize: bool | None = None
     auto_upload_draft: bool | None = None

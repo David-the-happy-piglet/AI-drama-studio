@@ -1,12 +1,21 @@
 import json
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from pathlib import Path
+
+from PIL import Image
 
 from app.config import Settings
 from app.models import AudienceProfile
 from app.services.generator import audience_to_context
 from app.services.humanizer import build_humanizer_prompt
-from app.services.images import MiniMaxImageProvider
+from app.services.images import (
+    ImageProviderError,
+    MiniMaxImageProvider,
+    MixedImageProvider,
+    OpenverseImageProvider,
+    WikimediaImageProvider,
+)
 from app.services.llm import (
     MockLLMProvider,
     build_llm_provider,
@@ -58,6 +67,7 @@ def test_prompt_contains_selected_audience():
     assert "中年健康管理" in prompt
     assert "35-55" in prompt
     assert "人到中年" in prompt
+    assert "目标长度：约1000字" in prompt
 
 
 def test_prompt_applies_headline_intensity():
@@ -113,6 +123,30 @@ def test_mock_generation_and_rendering():
     assert "one.png" in html
 
 
+def test_renderer_adds_web_image_attribution():
+    html = render_wechat_html(
+        {
+            "opening": "开头",
+            "sections": [{"heading": "小标题", "paragraphs": ["正文"]}],
+            "conclusion": "结尾",
+        },
+        ["cover.png"],
+        [
+            {
+                "source_kind": "web",
+                "source_page_url": "https://commons.wikimedia.org/wiki/File:Tea.jpg",
+                "source_author": "Example Author",
+                "license_name": "CC BY-SA 4.0",
+                "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+            }
+        ],
+    )
+    assert "图片来源与许可" in html
+    assert "Example Author" in html
+    assert "CC BY-SA 4.0" in html
+    assert "人工智能辅助生成" not in html
+
+
 def test_mock_headline_changes_with_intensity():
     context = audience_to_context(sample_audience())
     base_context = {
@@ -145,9 +179,7 @@ def test_parse_json_response_handles_reasoning_and_markdown():
 ```json
 {"selected_title": "晚饭后的三个小习惯"}
 ```"""
-    assert parse_json_response(content) == {
-        "selected_title": "晚饭后的三个小习惯"
-    }
+    assert parse_json_response(content) == {"selected_title": "晚饭后的三个小习惯"}
 
 
 def test_kimi_uses_required_temperature():
@@ -159,24 +191,25 @@ def test_kimi_uses_required_temperature():
 
 
 def test_token_usage_supports_openai_and_alias_fields():
-    assert parse_token_usage(
-        {
-            "usage": {
-                "prompt_tokens": 120,
-                "completion_tokens": 80,
-                "total_tokens": 200,
+    assert (
+        parse_token_usage(
+            {
+                "usage": {
+                    "prompt_tokens": 120,
+                    "completion_tokens": 80,
+                    "total_tokens": 200,
+                }
             }
-        }
-    ).total_tokens == 200
-    aliased = parse_token_usage(
-        {"usage": {"input_tokens": 25, "output_tokens": 15}}
+        ).total_tokens
+        == 200
     )
+    aliased = parse_token_usage({"usage": {"input_tokens": 25, "output_tokens": 15}})
     assert aliased.prompt_tokens == 25
     assert aliased.completion_tokens == 15
     assert aliased.total_tokens == 40
 
 
-def test_minimax_images_keep_aigc_watermark_by_default(monkeypatch, tmp_path: Path):
+def test_minimax_images_respect_disabled_aigc_watermark(monkeypatch, tmp_path: Path):
     captured = {}
 
     class FakeResponse:
@@ -194,12 +227,157 @@ def test_minimax_images_keep_aigc_watermark_by_default(monkeypatch, tmp_path: Pa
     provider = MiniMaxImageProvider(
         Settings(
             minimax_api_key="test-key",
+            aigc_watermark=False,
             generated_assets_dir=str(tmp_path),
         )
     )
     generated = provider.generate("prompt", "title", 0)
-    assert captured["aigc_watermark"] is True
+    assert captured["aigc_watermark"] is False
     assert Path(str(generated["local_path"])).read_bytes() == b"jpeg"
+
+
+def test_wikimedia_provider_downloads_reusable_image(monkeypatch, tmp_path: Path):
+    image_buffer = BytesIO()
+    Image.new("RGB", (800, 600), "white").save(image_buffer, format="JPEG")
+    image_bytes = image_buffer.getvalue()
+
+    class FakeResponse:
+        def __init__(self, *, payload=None, content=b""):
+            self._payload = payload
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    search_payload = {
+        "query": {
+            "pages": [
+                {
+                    "imageinfo": [
+                        {
+                            "mime": "image/jpeg",
+                            "thumburl": "https://upload.wikimedia.test/tea.jpg",
+                            "descriptionurl": ("https://commons.wikimedia.org/wiki/File:Tea.jpg"),
+                            "extmetadata": {
+                                "Artist": {"value": "<b>Example Author</b>"},
+                                "LicenseShortName": {"value": "CC BY-SA 4.0"},
+                                "LicenseUrl": {
+                                    "value": ("https://creativecommons.org/licenses/by-sa/4.0/")
+                                },
+                            },
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    def fake_get(url, **kwargs):
+        if "api.php" in url:
+            return FakeResponse(payload=search_payload)
+        return FakeResponse(content=image_bytes)
+
+    monkeypatch.setattr("app.services.images.httpx.get", fake_get)
+    provider = WikimediaImageProvider(
+        Settings(
+            generated_assets_dir=str(tmp_path),
+            public_base_url="http://content.test",
+        )
+    )
+    result = provider.generate("prompt", "tea", 1, "green tea cup")
+
+    assert result["source_kind"] == "web"
+    assert result["source_author"] == "Example Author"
+    assert result["license_name"] == "CC BY-SA 4.0"
+    assert Path(str(result["local_path"])).read_bytes() == image_bytes
+
+
+def test_openverse_provider_preserves_source_and_license(monkeypatch, tmp_path: Path):
+    image_buffer = BytesIO()
+    Image.new("RGB", (800, 600), "white").save(image_buffer, format="JPEG")
+    image_bytes = image_buffer.getvalue()
+
+    class FakeResponse:
+        def __init__(self, *, payload=None, content=b""):
+            self._payload = payload
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    search_payload = {
+        "results": [
+            {
+                "thumbnail": "https://api.openverse.test/image/thumb/",
+                "foreign_landing_url": "https://example.test/source-image",
+                "creator": "Example Photographer",
+                "license": "by",
+                "license_version": "4.0",
+                "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            }
+        ]
+    }
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/images/"):
+            return FakeResponse(payload=search_payload)
+        return FakeResponse(content=image_bytes)
+
+    monkeypatch.setattr("app.services.images.httpx.get", fake_get)
+    provider = OpenverseImageProvider(
+        Settings(
+            generated_assets_dir=str(tmp_path),
+            public_base_url="http://content.test",
+        )
+    )
+    result = provider.generate("prompt", "tea", 1, "green tea cup")
+
+    assert result["source_kind"] == "web"
+    assert result["source_author"] == "Example Photographer"
+    assert result["license_name"] == "CC BY 4.0"
+    assert result["source_page_url"] == "https://example.test/source-image"
+    assert Path(str(result["local_path"])).read_bytes() == image_bytes
+
+
+def test_mixed_provider_uses_web_for_alternating_inline_images():
+    class StubProvider:
+        def __init__(self, name):
+            self.name = name
+
+        def generate(self, prompt, title, position, search_query=None):
+            return {"source_kind": self.name}
+
+    provider = MixedImageProvider(
+        StubProvider("ai"),
+        StubProvider("web"),
+        fallback_to_ai=True,
+    )
+    assert provider.generate("p", "t", 0)["source_kind"] == "ai"
+    assert provider.generate("p", "t", 1)["source_kind"] == "web"
+    assert provider.generate("p", "t", 2)["source_kind"] == "ai"
+
+
+def test_mixed_provider_falls_back_to_ai():
+    class AiProvider:
+        def generate(self, prompt, title, position, search_query=None):
+            return {"source_kind": "ai"}
+
+    class FailingWebProvider:
+        def generate(self, prompt, title, position, search_query=None):
+            raise ImageProviderError("no result")
+
+    provider = MixedImageProvider(
+        AiProvider(),
+        FailingWebProvider(),
+        fallback_to_ai=True,
+    )
+    assert provider.generate("p", "t", 1)["source_kind"] == "ai"
 
 
 def test_wechat_draft_media_id_is_verified(monkeypatch):

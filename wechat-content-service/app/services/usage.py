@@ -11,15 +11,9 @@ def token_usage_summary(session: Session) -> dict:
             GenerationRun.model,
             func.count(GenerationRun.id).label("request_count"),
             func.count(GenerationRun.total_tokens).label("metered_requests"),
-            func.coalesce(func.sum(GenerationRun.prompt_tokens), 0).label(
-                "prompt_tokens"
-            ),
-            func.coalesce(func.sum(GenerationRun.completion_tokens), 0).label(
-                "completion_tokens"
-            ),
-            func.coalesce(func.sum(GenerationRun.total_tokens), 0).label(
-                "total_tokens"
-            ),
+            func.coalesce(func.sum(GenerationRun.prompt_tokens), 0).label("prompt_tokens"),
+            func.coalesce(func.sum(GenerationRun.completion_tokens), 0).label("completion_tokens"),
+            func.coalesce(func.sum(GenerationRun.total_tokens), 0).label("total_tokens"),
         )
         .where(
             GenerationRun.step.in_(["article", "humanize"]),

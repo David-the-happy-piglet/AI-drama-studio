@@ -55,10 +55,7 @@ def upload_article_to_draft(
                 job.status = "completed_unverified"
                 job.error_message = str(exc)[:2000]
                 session.commit()
-                message = (
-                    "Draft creation returned media_id, but verification failed: "
-                    f"{exc}"
-                )
+                message = f"Draft creation returned media_id, but verification failed: {exc}"
         return media_id, message
     except Exception as exc:
         session.rollback()

@@ -58,6 +58,7 @@ class Article(Base):
     )
     topic: Mapped[str] = mapped_column(String(300))
     category: Mapped[str] = mapped_column(String(100), default="日常养生")
+    target_length: Mapped[int] = mapped_column(Integer, default=1200)
     title_candidates_json: Mapped[str] = mapped_column(Text, default="[]")
     selected_title: Mapped[str] = mapped_column(String(300))
     summary: Mapped[str] = mapped_column(Text, default="")
@@ -104,6 +105,11 @@ class Asset(Base):
     prompt: Mapped[str] = mapped_column(Text)
     local_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_kind: Mapped[str] = mapped_column(String(40), default="generated")
+    source_page_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_author: Mapped[str | None] = mapped_column(Text, nullable=True)
+    license_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    license_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     wechat_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     wechat_media_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -169,9 +175,7 @@ class PublishJob(Base):
 
 class ArticleMetricDaily(Base):
     __tablename__ = "article_metrics_daily"
-    __table_args__ = (
-        UniqueConstraint("article_id", "metric_date", name="uq_article_metric_day"),
-    )
+    __table_args__ = (UniqueConstraint("article_id", "metric_date", name="uq_article_metric_day"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     article_id: Mapped[int] = mapped_column(ForeignKey("articles.id"), index=True)
@@ -219,6 +223,7 @@ class AutomationPlan(Base):
     timezone: Mapped[str] = mapped_column(String(80), default="Asia/Shanghai")
     title_count: Mapped[int] = mapped_column(Integer, default=5)
     image_count: Mapped[int] = mapped_column(Integer, default=3)
+    target_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
     headline_intensity: Mapped[int] = mapped_column(Integer, default=4)
     humanize: Mapped[bool] = mapped_column(Boolean, default=True)
     auto_upload_draft: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -15,4 +15,3 @@ def scan_article(text: str) -> list[str]:
         if re.search(pattern, text, flags=re.IGNORECASE):
             flags.append(message)
     return flags
-

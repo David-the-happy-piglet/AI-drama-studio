@@ -1,2 +1,1 @@
 """Wechat content generator service."""
-

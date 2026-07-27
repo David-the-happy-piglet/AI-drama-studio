@@ -17,11 +17,7 @@ def audience_values(data: AudienceCreate | AudienceUpdate) -> dict:
     values: dict = {}
     for key, value in raw.items():
         target = mapping.get(key, key)
-        values[target] = (
-            json.dumps(value, ensure_ascii=False)
-            if key in mapping
-            else value
-        )
+        values[target] = json.dumps(value, ensure_ascii=False) if key in mapping else value
     return values
 
 
@@ -107,4 +103,3 @@ def seed_audiences(session: Session) -> None:
     for item in defaults:
         session.add(AudienceProfile(**audience_values(item)))
     session.commit()
-

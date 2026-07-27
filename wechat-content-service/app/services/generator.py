@@ -54,6 +54,8 @@ def generate_article(
     settings: Settings,
 ) -> Article:
     audience_context = audience_to_context(audience)
+    target_length = request.target_length or audience_context["article_length"]
+    audience_context["article_length"] = target_length
     prompt = build_article_prompt(
         topic=request.topic,
         category=request.category,
@@ -69,6 +71,7 @@ def generate_article(
         "audience": audience_context,
         "title_count": request.title_count,
         "image_count": request.image_count,
+        "target_length": target_length,
         "headline_intensity": request.headline_intensity,
     }
     started = time.monotonic()
@@ -113,9 +116,7 @@ def generate_article(
                     "input_text": humanizer_prompt,
                     "output_text": humanized_text,
                     "status": "completed",
-                    "duration_ms": int(
-                        (time.monotonic() - humanizer_started) * 1000
-                    ),
+                    "duration_ms": int((time.monotonic() - humanizer_started) * 1000),
                     "prompt_tokens": llm.usage.prompt_tokens,
                     "completion_tokens": llm.usage.completion_tokens,
                     "total_tokens": llm.usage.total_tokens,
@@ -130,9 +131,7 @@ def generate_article(
                     "output_text": "",
                     "status": "failed",
                     "error_message": str(exc),
-                    "duration_ms": int(
-                        (time.monotonic() - humanizer_started) * 1000
-                    ),
+                    "duration_ms": int((time.monotonic() - humanizer_started) * 1000),
                 }
             )
 
@@ -144,6 +143,7 @@ def generate_article(
         audience_profile_id=audience.id,
         topic=request.topic,
         category=request.category,
+        target_length=target_length,
         title_candidates_json=json.dumps(
             result["title_candidates"],
             ensure_ascii=False,
@@ -178,6 +178,7 @@ def generate_article(
             image_spec["prompt"],
             result["selected_title"],
             index,
+            image_spec.get("search_query") or request.topic,
         )
         asset = Asset(
             article_id=article.id,
@@ -186,12 +187,31 @@ def generate_article(
             prompt=image_spec["prompt"],
             local_path=generated.get("local_path"),
             source_url=generated.get("source_url"),
+            source_kind=generated.get("source_kind") or image_provider.name,
+            source_page_url=generated.get("source_page_url"),
+            source_author=generated.get("source_author"),
+            license_name=generated.get("license_name"),
+            license_url=generated.get("license_url"),
         )
         session.add(asset)
         if generated.get("source_url"):
             asset_urls.append(str(generated["source_url"]))
 
-    article.content_html = render_wechat_html(result, asset_urls)
+    asset_credits = [
+        {
+            "source_kind": item.source_kind,
+            "source_page_url": item.source_page_url,
+            "source_author": item.source_author,
+            "license_name": item.license_name,
+            "license_url": item.license_url,
+        }
+        for item in sorted(article.assets, key=lambda asset: asset.position)
+    ]
+    article.content_html = render_wechat_html(
+        result,
+        asset_urls,
+        asset_credits,
+    )
     session.commit()
     session.refresh(article)
     return article

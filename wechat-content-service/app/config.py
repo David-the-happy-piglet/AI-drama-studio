@@ -51,6 +51,25 @@ class Settings:
     image_size: str = os.getenv("IMAGE_SIZE", "1024x1024")
     image_timeout_seconds: float = float(os.getenv("IMAGE_TIMEOUT_SECONDS", "120"))
     aigc_watermark: bool = _as_bool(os.getenv("AIGC_WATERMARK"), True)
+    image_source_mode: str = os.getenv("IMAGE_SOURCE_MODE", "ai")
+    web_image_provider: str = os.getenv("WEB_IMAGE_PROVIDER", "openverse")
+    web_image_fallback_to_ai: bool = _as_bool(
+        os.getenv("WEB_IMAGE_FALLBACK_TO_AI"),
+        True,
+    )
+    wikimedia_api_url: str = os.getenv(
+        "WIKIMEDIA_API_URL",
+        "https://commons.wikimedia.org/w/api.php",
+    )
+    openverse_api_url: str = os.getenv(
+        "OPENVERSE_API_URL",
+        "https://api.openverse.org/v1",
+    )
+    web_image_user_agent: str = os.getenv(
+        "WEB_IMAGE_USER_AGENT",
+        os.getenv("WIKIMEDIA_USER_AGENT", "ContentGenerator/0.1"),
+    )
+    web_image_max_bytes: int = int(os.getenv("WEB_IMAGE_MAX_BYTES", str(10 * 1024 * 1024)))
     generated_assets_dir: str = os.getenv(
         "GENERATED_ASSETS_DIR",
         "/app/generated-assets" if os.path.isdir("/app") else "./generated-assets",
@@ -69,15 +88,9 @@ class Settings:
         False,
     )
 
-    automation_poll_seconds: int = int(
-        os.getenv("AUTOMATION_POLL_SECONDS", "30")
-    )
-    automation_max_retries: int = int(
-        os.getenv("AUTOMATION_MAX_RETRIES", "3")
-    )
-    automation_stale_minutes: int = int(
-        os.getenv("AUTOMATION_STALE_MINUTES", "120")
-    )
+    automation_poll_seconds: int = int(os.getenv("AUTOMATION_POLL_SECONDS", "30"))
+    automation_max_retries: int = int(os.getenv("AUTOMATION_MAX_RETRIES", "3"))
+    automation_stale_minutes: int = int(os.getenv("AUTOMATION_STALE_MINUTES", "120"))
 
 
 settings = Settings()
