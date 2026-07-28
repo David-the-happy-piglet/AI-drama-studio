@@ -121,10 +121,84 @@
   <p class="muted">
     到点后自动选择具体主题、生成、润色、配图并推送到草稿箱；正式发布仍由你在公众号后台确认。
   </p>
+  <p>
+    <a class="button" href="#new-automation-plan"
+       onclick="document.getElementById('new-automation-plan').open=true">
+      新增定时任务
+    </a>
+  </p>
   {% if automation_plans %}
+    <h3>定时任务列表</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>计划</th>
+            <th>内容方向</th>
+            <th>目标受众</th>
+            <th>执行时间</th>
+            <th>模型 / 篇幅</th>
+            <th>草稿箱</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for plan in automation_plans %}
+          <tr>
+            <td><strong>{{ plan.name }}</strong></td>
+            <td title="{{ plan.directions }}">
+              {{ plan.directions[:45] }}{% if plan.directions|length > 45 %}…{% endif %}
+            </td>
+            <td>{{ plan.audience.name }}</td>
+            <td>
+              每天 {{ plan.run_time }}<br>
+              <span class="muted">{{ plan.timezone }}</span>
+            </td>
+            <td>
+              {{ plan.provider }}<br>
+              <span class="muted">
+                约 {{ plan.target_length or plan.audience.article_length }} 字
+              </span>
+            </td>
+            <td>
+              {% if plan.auto_upload_draft %}
+              <span class="tag">自动推送</span>
+              {% else %}
+              <span class="muted">仅生成</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if plan.enabled %}
+              <span class="tag">已启用</span>
+              {% else %}
+              <span class="tag" style="background:#f1f1f1;color:#747474">已停用</span>
+              {% endif %}
+            </td>
+            <td style="white-space:nowrap">
+              <a class="button" href="#plan-{{ plan.id }}"
+                 onclick="document.getElementById('plan-{{ plan.id }}').open=true"
+                 style="padding:7px 10px">编辑</a>
+              <form method="post"
+                    action="/admin/automation-plans/{{ plan.id }}/run-now"
+                    style="display:inline;margin:0">
+                <button type="submit" style="padding:7px 10px;background:#577465">
+                  立即运行
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:24px">任务配置</h3>
     {% for plan in automation_plans %}
+    <details id="plan-{{ plan.id }}">
+      <summary>编辑：{{ plan.name }}</summary>
     <form method="post" action="/admin/automation-plans/{{ plan.id }}"
-          style="border-top:1px solid var(--line);padding-top:16px;margin-top:16px">
+          style="padding-bottom:16px">
       <div class="grid">
         <div>
           <label>计划名称</label>
@@ -216,8 +290,12 @@
         立即运行一次
       </button>
     </form>
+    </details>
     {% endfor %}
-  {% else %}
+  {% endif %}
+
+  <details id="new-automation-plan" {% if not automation_plans %}open{% endif %}>
+    <summary>新增定时任务</summary>
     <form method="post" action="/admin/automation-plans">
       <div class="grid">
         <div>
@@ -281,9 +359,9 @@
           启用每日执行
         </label>
       </p>
-      <button type="submit">创建自动计划</button>
+      <button type="submit">创建新计划</button>
     </form>
-  {% endif %}
+  </details>
 </section>
 
 <section class="card" style="margin-top:20px">

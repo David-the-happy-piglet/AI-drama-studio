@@ -15,6 +15,7 @@ from app.services.images import (
     MixedImageProvider,
     OpenverseImageProvider,
     WikimediaImageProvider,
+    normalize_search_query,
 )
 from app.services.llm import (
     MockLLMProvider,
@@ -68,6 +69,7 @@ def test_prompt_contains_selected_audience():
     assert "35-55" in prompt
     assert "人到中年" in prompt
     assert "目标长度：约1000字" in prompt
+    assert "不得返回数组、对象或其他类型" in prompt
 
 
 def test_prompt_applies_headline_intensity():
@@ -236,6 +238,75 @@ def test_minimax_images_respect_disabled_aigc_watermark(monkeypatch, tmp_path: P
     assert Path(str(generated["local_path"])).read_bytes() == b"jpeg"
 
 
+def test_minimax_images_report_business_error(monkeypatch, tmp_path: Path):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "data": None,
+                "metadata": {"failed_count": 1},
+                "base_resp": {
+                    "status_code": 1008,
+                    "status_msg": "insufficient balance",
+                },
+            }
+
+    monkeypatch.setattr(
+        "app.services.images.httpx.post",
+        lambda *args, **kwargs: FakeResponse(),
+    )
+    provider = MiniMaxImageProvider(
+        Settings(
+            minimax_api_key="test-key",
+            generated_assets_dir=str(tmp_path),
+        )
+    )
+
+    try:
+        provider.generate("prompt", "title", 0)
+    except ImageProviderError as exc:
+        message = str(exc)
+        assert "status_code=1008" in message
+        assert "insufficient balance" in message
+    else:
+        raise AssertionError("Expected MiniMax business error")
+
+
+def test_minimax_images_report_empty_data(monkeypatch, tmp_path: Path):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "data": None,
+                "metadata": {"failed_count": 1},
+                "base_resp": {"status_code": 0, "status_msg": "success"},
+            }
+
+    monkeypatch.setattr(
+        "app.services.images.httpx.post",
+        lambda *args, **kwargs: FakeResponse(),
+    )
+    provider = MiniMaxImageProvider(
+        Settings(
+            minimax_api_key="test-key",
+            generated_assets_dir=str(tmp_path),
+        )
+    )
+
+    try:
+        provider.generate("prompt", "title", 0)
+    except ImageProviderError as exc:
+        message = str(exc)
+        assert "returned no image data" in message
+        assert "failed_count=1" in message
+    else:
+        raise AssertionError("Expected missing MiniMax image data error")
+
+
 def test_wikimedia_provider_downloads_reusable_image(monkeypatch, tmp_path: Path):
     image_buffer = BytesIO()
     Image.new("RGB", (800, 600), "white").save(image_buffer, format="JPEG")
@@ -336,13 +407,31 @@ def test_openverse_provider_preserves_source_and_license(monkeypatch, tmp_path: 
             public_base_url="http://content.test",
         )
     )
-    result = provider.generate("prompt", "tea", 1, "green tea cup")
+    result = provider.generate(
+        "prompt",
+        "tea",
+        1,
+        ["green tea", "cup"],
+    )
 
     assert result["source_kind"] == "web"
     assert result["source_author"] == "Example Photographer"
     assert result["license_name"] == "CC BY 4.0"
     assert result["source_page_url"] == "https://example.test/source-image"
     assert Path(str(result["local_path"])).read_bytes() == image_bytes
+
+
+def test_search_query_normalization_handles_model_type_drift():
+    assert normalize_search_query(" healthy family ", "fallback") == "healthy family"
+    assert (
+        normalize_search_query(
+            ["healthy", " family ", "healthy", 2026, {"ignored": True}],
+            "fallback",
+        )
+        == "healthy family 2026"
+    )
+    assert normalize_search_query({"unexpected": "object"}, "fallback") == "fallback"
+    assert normalize_search_query([], "fallback") == "fallback"
 
 
 def test_mixed_provider_uses_web_for_alternating_inline_images():
@@ -378,6 +467,23 @@ def test_mixed_provider_falls_back_to_ai():
         fallback_to_ai=True,
     )
     assert provider.generate("p", "t", 1)["source_kind"] == "ai"
+
+
+def test_mixed_provider_falls_back_to_web_when_ai_fails():
+    class FailingAiProvider:
+        def generate(self, prompt, title, position, search_query=None):
+            raise ImageProviderError("no AI image")
+
+    class WebProvider:
+        def generate(self, prompt, title, position, search_query=None):
+            return {"source_kind": "web"}
+
+    provider = MixedImageProvider(
+        FailingAiProvider(),
+        WebProvider(),
+        fallback_to_ai=True,
+    )
+    assert provider.generate("p", "t", 0)["source_kind"] == "web"
 
 
 def test_wechat_draft_media_id_is_verified(monkeypatch):

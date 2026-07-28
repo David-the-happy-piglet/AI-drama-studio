@@ -85,7 +85,7 @@ def build_article_prompt(
                 "position": 0,
                 "asset_type": "cover或inline",
                 "prompt": "无文字的中文图片生成提示词",
-                "search_query": "适合开放图库检索的2至5个英文关键词",
+                "search_query": "healthy family dinner（单个字符串，不是数组）",
             }
         ],
     }
@@ -114,7 +114,8 @@ def build_article_prompt(
    正文主体尽量控制在目标长度的 90% 到 110%，根据篇幅调整小标题和段落数量。
 4. 不诊断疾病，不建议停药，不提供具体药物剂量，不虚构医生或患者。
 5. 生成{image_count}个无文字图片提示词，第一张为封面；每张同时提供2至5个
-   准确、具体、适合开放图库检索的英文 search_query 关键词。
+   准确、具体、适合开放图库检索的英文关键词。search_query 必须是一个用空格连接
+   关键词的 JSON 字符串，不得返回数组、对象或其他类型。
 6. 只返回 JSON，不要 Markdown。
 
 返回结构：

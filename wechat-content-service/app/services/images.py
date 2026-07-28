@@ -2,6 +2,7 @@ import base64
 import html
 import io
 import json
+import logging
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -12,6 +13,8 @@ import httpx
 from PIL import Image, ImageDraw
 
 from ..config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class ImageProviderError(RuntimeError):
@@ -27,7 +30,7 @@ class ImageProvider(ABC):
         prompt: str,
         title: str,
         position: int,
-        search_query: str | None = None,
+        search_query: object | None = None,
     ) -> dict[str, str | None]:
         raise NotImplementedError
 
@@ -45,7 +48,7 @@ class PlaceholderImageProvider(ImageProvider):
         prompt: str,
         title: str,
         position: int,
-        search_query: str | None = None,
+        search_query: object | None = None,
     ) -> dict[str, str | None]:
         filename = f"{uuid4().hex}.png"
         path = self.output_dir / filename
@@ -97,7 +100,7 @@ class CompatibleImageProvider(ImageProvider):
         prompt: str,
         title: str,
         position: int,
-        search_query: str | None = None,
+        search_query: object | None = None,
     ) -> dict[str, str | None]:
         response = httpx.post(
             f"{self.api_base}/images/generations",
@@ -164,8 +167,9 @@ class MiniMaxImageProvider(ImageProvider):
         prompt: str,
         title: str,
         position: int,
-        search_query: str | None = None,
+        search_query: object | None = None,
     ) -> dict[str, str | None]:
+        response: httpx.Response | None = None
         try:
             response = httpx.post(
                 f"{self.api_base}/image_generation",
@@ -185,19 +189,58 @@ class MiniMaxImageProvider(ImageProvider):
                 timeout=self.timeout,
             )
             response.raise_for_status()
-            encoded = response.json()["data"]["image_base64"][0]
-            image_bytes = base64.b64decode(encoded)
+            body = response.json()
         except (
             httpx.HTTPError,
-            KeyError,
-            IndexError,
             json.JSONDecodeError,
-            ValueError,
         ) as exc:
             detail = ""
             if isinstance(exc, httpx.HTTPStatusError):
                 detail = f" — {exc.response.text[:500]}"
             raise ImageProviderError(f"MiniMax image request failed: {exc}{detail}") from exc
+
+        if not isinstance(body, dict):
+            raise ImageProviderError("MiniMax image request returned a non-object response")
+
+        base_response = body.get("base_resp")
+        status_code = base_response.get("status_code") if isinstance(base_response, dict) else None
+        status_message = (
+            str(base_response.get("status_msg") or "")[:300]
+            if isinstance(base_response, dict)
+            else ""
+        )
+        if status_code not in (None, 0, "0"):
+            raise ImageProviderError(
+                "MiniMax image request failed"
+                f" (status_code={status_code}, status_msg={status_message or 'unknown'})"
+            )
+
+        data = body.get("data")
+        encoded_images = data.get("image_base64") if isinstance(data, dict) else None
+        if (
+            not isinstance(encoded_images, list)
+            or not encoded_images
+            or not isinstance(encoded_images[0], str)
+            or not encoded_images[0]
+        ):
+            metadata = body.get("metadata")
+            failed_count = metadata.get("failed_count") if isinstance(metadata, dict) else None
+            details = []
+            if status_code is not None:
+                details.append(f"status_code={status_code}")
+            if status_message:
+                details.append(f"status_msg={status_message}")
+            if failed_count is not None:
+                details.append(f"failed_count={failed_count}")
+            suffix = f" ({', '.join(details)})" if details else ""
+            raise ImageProviderError(f"MiniMax image request returned no image data{suffix}")
+
+        try:
+            image_bytes = base64.b64decode(encoded_images[0], validate=True)
+        except (ValueError, TypeError) as exc:
+            raise ImageProviderError(
+                "MiniMax image request returned invalid base64 image data"
+            ) from exc
 
         filename = f"{uuid4().hex}.jpg"
         path = self.output_dir / filename
@@ -214,6 +257,25 @@ def _plain_metadata(value: str | None) -> str:
         return ""
     without_tags = re.sub(r"<[^>]+>", " ", value)
     return " ".join(html.unescape(without_tags).split())
+
+
+def normalize_search_query(value: object | None, fallback: str) -> str:
+    fallback_query = str(fallback or "").strip()
+    if isinstance(value, str):
+        return value.strip() or fallback_query
+    if isinstance(value, (list, tuple, set)):
+        parts = []
+        for item in value:
+            if isinstance(item, str):
+                part = item.strip()
+            elif isinstance(item, (int, float)):
+                part = str(item)
+            else:
+                continue
+            if part and part not in parts:
+                parts.append(part)
+        return " ".join(parts) or fallback_query
+    return fallback_query
 
 
 class WikimediaImageProvider(ImageProvider):
@@ -343,9 +405,9 @@ class WikimediaImageProvider(ImageProvider):
         prompt: str,
         title: str,
         position: int,
-        search_query: str | None = None,
+        search_query: object | None = None,
     ) -> dict[str, str | None]:
-        query = (search_query or title).strip()
+        query = normalize_search_query(search_query, title)
         candidates = self._search(query)
         if not candidates and query != title:
             candidates = self._search(title)
@@ -475,9 +537,9 @@ class OpenverseImageProvider(ImageProvider):
         prompt: str,
         title: str,
         position: int,
-        search_query: str | None = None,
+        search_query: object | None = None,
     ) -> dict[str, str | None]:
-        query = (search_query or title).strip()
+        query = normalize_search_query(search_query, title)
         candidates = self._search(query)
         if not candidates and query != title:
             candidates = self._search(title)
@@ -505,7 +567,7 @@ class FallbackWebImageProvider(ImageProvider):
         prompt: str,
         title: str,
         position: int,
-        search_query: str | None = None,
+        search_query: object | None = None,
     ) -> dict[str, str | None]:
         last_error: ImageProviderError | None = None
         for provider in self.providers:
@@ -534,17 +596,40 @@ class MixedImageProvider(ImageProvider):
         prompt: str,
         title: str,
         position: int,
-        search_query: str | None = None,
+        search_query: object | None = None,
     ) -> dict[str, str | None]:
         # Keep the cover generated for visual consistency; use searched images
         # for every other inline position.
         if position % 2 == 0:
-            return self.ai_provider.generate(prompt, title, position, search_query)
+            try:
+                return self.ai_provider.generate(
+                    prompt,
+                    title,
+                    position,
+                    search_query,
+                )
+            except ImageProviderError as exc:
+                logger.warning(
+                    "AI image generation failed at position %s; using web image: %s",
+                    position,
+                    exc,
+                )
+                return self.web_provider.generate(
+                    prompt,
+                    title,
+                    position,
+                    search_query,
+                )
         try:
             return self.web_provider.generate(prompt, title, position, search_query)
-        except ImageProviderError:
+        except ImageProviderError as exc:
             if not self.fallback_to_ai:
                 raise
+            logger.warning(
+                "Web image generation failed at position %s; using AI image: %s",
+                position,
+                exc,
+            )
             return self.ai_provider.generate(prompt, title, position, search_query)
 
 

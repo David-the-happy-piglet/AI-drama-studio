@@ -8,7 +8,7 @@ from ..config import Settings
 from ..models import Article, Asset, AudienceProfile, GenerationRun
 from ..schemas import ArticleGenerateRequest
 from .humanizer import build_humanizer_prompt
-from .images import build_image_provider
+from .images import build_image_provider, normalize_search_query
 from .llm import build_llm_provider
 from .prompts import build_article_prompt
 from .renderer import render_wechat_html
@@ -45,6 +45,24 @@ def _validate_result(result: dict[str, Any]) -> None:
         raise ValueError(f"LLM response missing keys: {', '.join(sorted(missing))}")
     if not result["title_candidates"] or not result["sections"]:
         raise ValueError("LLM response must contain titles and sections")
+    if not isinstance(result["image_prompts"], list) or not result["image_prompts"]:
+        raise ValueError("LLM response image_prompts must be a non-empty list")
+    for item in result["image_prompts"]:
+        if not isinstance(item, dict):
+            raise TypeError("Each image prompt must be an object")
+        if not isinstance(item.get("prompt"), str) or not item["prompt"].strip():
+            raise ValueError("Each image prompt must contain a prompt string")
+
+
+def _normalize_image_search_queries(
+    result: dict[str, Any],
+    fallback: str,
+) -> None:
+    for item in result["image_prompts"]:
+        item["search_query"] = normalize_search_query(
+            item.get("search_query"),
+            fallback,
+        )
 
 
 def generate_article(
@@ -80,6 +98,7 @@ def generate_article(
         context,
     )
     _validate_result(draft_result)
+    _normalize_image_search_queries(draft_result, request.topic)
     draft_text = json.dumps(draft_result, ensure_ascii=False)
     generation_runs = [
         {

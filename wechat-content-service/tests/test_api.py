@@ -95,6 +95,37 @@ def test_provider_status_and_mock_comparison():
         assert "totals" in usage.json()
 
 
+def test_generation_normalizes_list_image_search_queries(monkeypatch):
+    class ListQueryMockProvider(MockLLMProvider):
+        def generate_article(self, prompt, context):
+            result = super().generate_article(prompt, context)
+            result["image_prompts"][0]["search_query"] = [
+                "healthy family",
+                "dinner",
+            ]
+            return result
+
+    monkeypatch.setattr(
+        generator_service,
+        "build_llm_provider",
+        lambda settings, provider_name=None: ListQueryMockProvider(),
+    )
+    with TestClient(app) as client:
+        generated = client.post(
+            "/api/articles/generate",
+            json={
+                "topic": "家庭晚饭如何搭配得更轻松",
+                "provider": "mock",
+                "image_count": 1,
+            },
+        )
+        assert generated.status_code == 201
+        search_query = generated.json()["content"]["image_prompts"][0][
+            "search_query"
+        ]
+        assert search_query == "healthy family dinner"
+
+
 def test_headline_intensity_validation_and_admin_control():
     with TestClient(app) as client:
         admin = client.get("/admin")
@@ -402,7 +433,43 @@ def test_daily_automation_generates_and_uploads_mock_draft():
         assert article["wechat_media_id"].startswith("mock-draft-")
         assert "人工智能辅助生成" not in article["content_html"]
 
+        admin_before_second = client.get("/admin")
+        assert 'id="new-automation-plan"' in admin_before_second.text
+        assert 'action="/admin/automation-plans"' in admin_before_second.text
+        assert "新增定时任务" in admin_before_second.text
+
+        second = client.post(
+            "/admin/automation-plans",
+            data={
+                "name": "家庭饮食晚间计划",
+                "audience_slug": "senior-wellness",
+                "directions": "普通家庭容易执行的晚饭搭配和厨房习惯",
+                "category": "家庭饮食",
+                "provider": "mock",
+                "run_time": "20:15",
+                "timezone": "Asia/Shanghai",
+                "target_length": "800",
+                "headline_intensity": "3",
+            },
+            follow_redirects=False,
+        )
+        assert second.status_code == 303
+        plans = client.get("/api/automation/plans").json()
+        second_plan = next(
+            item for item in plans if item["name"] == "家庭饮食晚间计划"
+        )
+        assert len(plans) >= 2
+
         admin = client.get("/admin")
         assert admin.status_code == 200
+        assert "定时任务列表" in admin.text
+        assert "执行时间" in admin.text
+        assert "模型 / 篇幅" in admin.text
         assert "测试每日计划" in admin.text
+        assert "家庭饮食晚间计划" in admin.text
+        assert "每天 20:15" in admin.text
+        assert "仅生成" in admin.text
+        assert "已停用" in admin.text
+        assert f'id="plan-{plan["id"]}"' in admin.text
+        assert f'id="plan-{second_plan["id"]}"' in admin.text
         assert "立即运行一次" in admin.text

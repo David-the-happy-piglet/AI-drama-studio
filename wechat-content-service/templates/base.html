@@ -20,8 +20,11 @@
     button,.button { display:inline-block; border:0; border-radius:8px; background:var(--green); color:#fff; padding:10px 16px; text-decoration:none; cursor:pointer; font:inherit; }
     .muted { color:#718078; }
     .tag { display:inline-block; background:#edf5ef; color:#356a4c; border-radius:999px; padding:4px 9px; margin:2px; font-size:13px; }
+    .table-wrap { width:100%; overflow-x:auto; }
     table { width:100%; border-collapse:collapse; }
     th,td { padding:12px 8px; border-bottom:1px solid var(--line); text-align:left; }
+    details { border:1px solid var(--line); border-radius:10px; margin-top:12px; padding:0 14px; }
+    details > summary { cursor:pointer; font-weight:700; color:#356a4c; padding:14px 0; }
     iframe { width:100%; min-height:720px; border:1px solid var(--line); border-radius:10px; background:#fff; }
   </style>
 </head>
@@ -30,4 +33,3 @@
   <main>{% block content %}{% endblock %}</main>
 </body>
 </html>
-
