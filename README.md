@@ -1,69 +1,71 @@
 # AI Drama Studio
 
-以镜头为单位的 AI 短剧制作平台：从故事与剧本审阅，到角色/场景资产、分镜、首帧、视频任务和生成历史，把制作过程组织为可追踪、可修订的 workflow。
+**English** | [简体中文](README.zh-CN.md)
 
-独立仓库：`David-the-happy-piglet/AI-drama-studio`，默认分支为 `main`。公众号文章系统见 [wechat-cg 仓库](https://github.com/David-the-happy-piglet/wechat-cg)。
+An AI short-drama production platform organized around individual shots. It connects story and script review, character and scene assets, storyboards, keyframes, video tasks, and generation history in a workflow that can be traced and revised.
 
-## 制作工作流
+Maintained independently in `David-the-happy-piglet/AI-drama-studio`, with `main` as the default branch. The WeChat article system lives in [wechat-cg](https://github.com/David-the-happy-piglet/wechat-cg).
+
+## Production workflow
 
 ```mermaid
 flowchart TD
-    P[创建项目与分集] --> S[故事简介 / 导入外部剧本与分镜]
-    S --> R[修改剧本并人工确认]
-    R --> B[审阅并批准分镜]
-    B --> A[关联角色母版、造型和场景资产]
-    A --> K[生成或导入镜头首帧]
-    K --> C[审阅候选并选用首帧]
-    C --> V[确认参数与费用后提交视频]
-    V --> W[Worker 查询任务并保存结果]
-    W --> H[生成历史：预览、比较、下载]
-    H --> E[外部剪辑与成片]
+    P[Create project and episodes] --> S[Story idea / import script and storyboard]
+    S --> R[Edit and confirm script]
+    R --> B[Review and approve storyboard]
+    B --> A[Link characters, outfits and scene assets]
+    A --> K[Generate or import shot keyframes]
+    K --> C[Review candidates and select keyframes]
+    C --> V[Confirm parameters and cost; submit video]
+    V --> W[Worker polls tasks and saves results]
+    W --> H[Generation history: preview, compare, download]
+    H --> E[External editing and final assembly]
     H --> R
 ```
 
-| 阶段 | 操作者与系统如何协作 | 保存的产物 |
+| Stage | Operator and system interaction | Saved output |
 | --- | --- | --- |
-| 项目与故事 | 新建项目/分集；手写、导入外部分镜，或使用配置的文本模型规划 | 分集、剧本草稿、分镜审阅稿 |
-| 审阅与发布分镜 | 修改原文与逐镜头描述，确认剧本后批准分镜 | Episode → Scene → Shot |
-| 一致性资产 | 上传角色母版、造型、场景参考；按需确认同步远端主体 | 本地资产、关联、图片指纹 |
-| 首帧 | 生成候选或导入对话生图结果，人工选择；批处理可自动采用第一张候选 | 首帧候选与当前选用版本 |
-| 视频制作 | 预检模型能力、素材、时长和费用；确认后逐镜或批量提交 | 独立 Generation 尝试及外部任务 ID |
-| 复核与交付 | 查询结果、比较历史、下载满意片段，交由外部剪辑软件合成 | 视频与调用输入快照 |
+| Project and story | Create projects and episodes; write manually, import storyboards, or plan with a configured text model | Episodes, script drafts, storyboard review drafts |
+| Storyboard review and approval | Edit the script and shot descriptions, confirm the script, then approve the storyboard | Episode → Scene → Shot |
+| Consistency assets | Upload character master images, outfits, and scene references; explicitly confirm remote subject registration when needed | Local assets, associations, image fingerprints |
+| Keyframes | Generate candidates or import images from a conversation; select manually, or let a batch adopt the first candidate | Candidate images and the selected keyframe version |
+| Video production | Validate model capabilities, assets, duration, and costs; confirm single-shot or batch submission | Separate Generation attempts and external task IDs |
+| Review and delivery | Query results, compare history, download selected clips, and assemble them in external editing software | Videos and snapshots of generation inputs |
 
-### 三种制作路径
+### Three production paths
 
-1. **逐镜制作**：先审首帧，再确认视频调用。适合需要逐项调控的镜头。
-2. **分阶段批量制作**：批量生成首帧后，再独立确认批量视频提交。
-3. **首帧 → 视频工作流**：一次确认授权两个阶段；每个镜头在首帧就绪后独立推进，不必等待整批。镜头或资产版本变化会拦截后续提交。
+1. **One shot at a time.** Review the keyframe, then confirm the video call. Use this when shots need individual control.
+2. **Separate batch stages.** Generate keyframes in a batch, then independently confirm batch video submission.
+3. **Keyframe → video workflow.** One confirmation authorizes both stages. Each shot advances once its keyframe is ready, without waiting for the entire batch. Changes to shot or asset versions block subsequent submission.
 
-批量 worker 使用持久化任务与数据库租约，关闭浏览器后仍可运行。已发送请求出现超时或不确定结果时不会自动重复提交付费生成；需要核对远端状态。批量视频只有下载并记录校验信息后才标记 ready；单条人工任务在历史页手动刷新。
+The batch worker uses persistent jobs and database leases, so it can continue after the browser closes. Timeouts or uncertain results do not automatically trigger another paid submission; the remote state must be checked. Batch videos are marked ready only after downloading and recording verification metadata. Individual manually submitted tasks are refreshed from the history page.
 
-### 修订与可追溯性
+### Revision and traceability
 
-每次生成独立保存 prompt、参考输入、模型、参数、镜头版本、外部任务 ID、状态和输出，不覆盖旧结果。已批准分镜可撤回修订，稳定 ID 的镜头保留关联与历史；失效素材提示复核。角色母版与场景母版支持复用，但不承诺自动解决所有跨镜头连续性问题。
+Each generation independently records prompts, reference inputs, model, parameters, shot version, external task ID, status, and output without overwriting earlier results. Approved storyboards can be withdrawn for revision. Shots with stable IDs retain associations and history, while stale assets are flagged for review. Character and scene master assets can be reused, but the system does not claim to solve all continuity problems across shots automatically.
 
-## 工程组成
+## Engineering structure
 
 ```text
 ai-drama-studio/
-├── frontend/              # React + TypeScript + Vite 制作台
+├── frontend/              # React + TypeScript + Vite production UI
 ├── backend/
-│   ├── app/api/           # REST 接口
-│   ├── app/services/      # 剧本审阅、资产、首帧、生成、批次协调
-│   ├── app/providers/     # 文本/图片/视频适配边界
-│   ├── app/models/        # 项目、分集、场景、镜头与生成记录
+│   ├── app/api/           # REST endpoints
+│   ├── app/services/      # Script review, assets, keyframes, generations and batches
+│   ├── app/providers/     # Text, image and video adapter boundaries
+│   ├── app/models/        # Projects, episodes, scenes, shots and generation records
 │   ├── app/batch_worker.py
-│   ├── migrations/       # Alembic 数据库迁移
+│   ├── migrations/        # Alembic database migrations
 │   └── tests/
-├── config/providers/      # 非敏感 provider 配置
-├── docs/                  # 架构与工作流交接文档
+├── config/providers/      # Non-secret provider configuration
+├── docs/                  # Architecture and workflow handoff guides
 ├── .env.example
 └── docker-compose.yml
 ```
 
-后端为 FastAPI + SQLAlchemy；本地默认 SQLite，Compose 使用 PostgreSQL。支持 mock，以及 Seedance、Kling、MiniMax 对应的已实现适配器；可用模式以应用预检和实际账号权限为准。密钥只在后端加载。
+The backend uses FastAPI and SQLAlchemy. Local development defaults to SQLite; Compose uses PostgreSQL. Implemented adapters include mock, Seedance, Kling, and MiniMax. Available modes depend on application preflight checks and the actual account's permissions. Credentials are loaded only by the backend.
 
-## 无密钥本地启动
+## Run locally without API keys
 
 ```bash
 git clone https://github.com/David-the-happy-piglet/AI-drama-studio.git
@@ -76,13 +78,15 @@ alembic upgrade head
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
-在第二个终端激活同一虚拟环境，进入 `ai-drama-studio/backend`，运行：
+In a second terminal, start from the cloned repository root:
 
 ```bash
+source ai-drama-studio/.venv/bin/activate
+cd ai-drama-studio/backend
 python -m app.batch_worker
 ```
 
-在第三个终端运行：
+In a third terminal, start from the cloned repository root:
 
 ```bash
 cd ai-drama-studio/frontend
@@ -90,11 +94,13 @@ npm ci
 npm run dev
 ```
 
-访问 [制作台](http://localhost:3000) 和 [API 文档](http://localhost:8100/docs)。无密钥时可手工建立项目与分镜，通过 API 的 mock provider 验证生成与历史流程（制作界面聚焦真实平台）。真实生成需要后端 provider 配置及界面确认；无需先安装或登录视频厂商 CLI 来启动本地制作台。
+Open the [production UI](http://localhost:3000) and [API documentation](http://localhost:8100/docs). Without credentials, you can manually create projects and storyboards and use the API's mock provider to validate generation and history. The production UI focuses on real providers. Real generation requires backend provider configuration and confirmation in the UI. A provider CLI installation or login is not required to start the local studio.
 
-容器方式：进入 `ai-drama-studio`，复制 `.env.example` 为 `.env`，执行 `docker compose up --build`。各服务端口与配置见 [运行指南](ai-drama-studio/README.md)。
+For containers, enter `ai-drama-studio`, copy `.env.example` to `.env`, and run `docker compose up --build`. See the [operations guide](ai-drama-studio/README.md) for service ports and configuration.
 
-## 验证
+## Validation
+
+From the cloned repository root:
 
 ```bash
 cd ai-drama-studio/backend
@@ -105,16 +111,20 @@ npm test
 npm run build
 ```
 
-分支 CI 分别验证后端、前端、空库迁移与 Compose。测试使用模拟 provider，不提交真实付费任务。
+CI validates the backend, frontend, migrations against an empty database, and Compose configuration. Tests use simulated providers and do not submit real paid tasks.
 
-## 文档与边界
+## Documentation and current boundaries
 
-- [运行与 provider 配置](ai-drama-studio/README.md)
-- [架构设计](ai-drama-studio/docs/ARCHITECTURE.md)
-- [Claude / 外部分镜交接](ai-drama-studio/docs/CLAUDE_STORYBOARD_HANDOFF.md)
-- [对话生图与批量入库](ai-drama-studio/docs/CONVERSATION_IMAGE_BATCHES.md)
-- [数据库迁移](ai-drama-studio/backend/migrations/README.md)
+The detailed guides below are currently written in Chinese:
 
-当前不包含完整时间线剪辑、自动整集合成、TTS 或全自动连续性审查；成片剪辑在外部工具完成。`data/`、本地数据库、备份、密钥和生成产物不提交 Git，clone 后不会包含开发者的制作项目。
+- [Operations and provider configuration](ai-drama-studio/README.md)
+- [Architecture](ai-drama-studio/docs/ARCHITECTURE.md)
+- [Claude / external storyboard handoff](ai-drama-studio/docs/CLAUDE_STORYBOARD_HANDOFF.md)
+- [Conversation-generated images and batch import](ai-drama-studio/docs/CONVERSATION_IMAGE_BATCHES.md)
+- [Database migrations](ai-drama-studio/backend/migrations/README.md)
 
-本项目从 `Ctwqk/ContentGenerator` 的 `AI-drama-studio` 分支拆分，保留来源历史与原始提交作者；后续在本仓库独立维护。
+The current application does not include a full editing timeline, automatic episode assembly, TTS, or fully automated continuity review. Final editing happens in external software. `data/`, local databases, backups, credentials, and generated outputs are excluded from Git; cloning does not include the developer's production projects.
+
+## Project origins
+
+This project was split from the `AI-drama-studio` branch of `Ctwqk/ContentGenerator`. Source history and original commit authors are preserved; ongoing development is maintained independently here.
