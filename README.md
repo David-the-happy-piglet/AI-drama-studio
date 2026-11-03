@@ -2,7 +2,7 @@
 
 以镜头为单位的 AI 短剧制作平台：从故事与剧本审阅，到角色/场景资产、分镜、首帧、视频任务和生成历史，把制作过程组织为可追踪、可修订的 workflow。
 
-本分支：`AI-drama-studio`。公众号文章系统见 [wechat-cg 分支](https://github.com/Ctwqk/ContentGenerator/tree/wechat-cg)。
+独立仓库：`David-the-happy-piglet/AI-drama-studio`，默认分支为 `main`。公众号文章系统见 [wechat-cg 仓库](https://github.com/David-the-happy-piglet/wechat-cg)。
 
 ## 制作工作流
 
@@ -66,8 +66,8 @@ ai-drama-studio/
 ## 无密钥本地启动
 
 ```bash
-git clone --branch AI-drama-studio https://github.com/Ctwqk/ContentGenerator.git
-cd ContentGenerator/ai-drama-studio
+git clone https://github.com/David-the-happy-piglet/AI-drama-studio.git
+cd AI-drama-studio/ai-drama-studio
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements-dev.txt
@@ -117,4 +117,4 @@ npm run build
 
 当前不包含完整时间线剪辑、自动整集合成、TTS 或全自动连续性审查；成片剪辑在外部工具完成。`data/`、本地数据库、备份、密钥和生成产物不提交 Git，clone 后不会包含开发者的制作项目。
 
-本分支保留 `Ctwqk/ContentGenerator` 的来源历史，独立组织短剧应用；原始提交作者保持不变。
+本项目从 `Ctwqk/ContentGenerator` 的 `AI-drama-studio` 分支拆分，保留来源历史与原始提交作者；后续在本仓库独立维护。
