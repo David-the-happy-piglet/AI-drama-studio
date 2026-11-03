@@ -1,9 +1,0 @@
-line-length = 100
-
-[lint]
-extend-select = ["B", "I", "ISC", "SIM"]
-ignore = [
-  # FastAPI intentionally uses Depends(...) and Form(...) as parameter defaults.
-  "B008",
-]
-

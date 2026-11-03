@@ -1,0 +1,9 @@
+# Runtime configuration is read from server-side environment variables.
+# This file documents the active integration; never store credentials here.
+provider: seedance
+transport: http
+platform: volcengine_ark
+base_url_env: ARK_BASE_URL
+api_key_env: ARK_API_KEY
+model_env: ARK_VIDEO_MODEL
+default_model: doubao-seedance-2-0-260128

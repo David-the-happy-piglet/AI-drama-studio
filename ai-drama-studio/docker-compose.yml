@@ -1,0 +1,110 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ai_drama
+      POSTGRES_USER: ai_drama
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_drama -d ai_drama"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    profiles: ["reserved-infra"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-change-me}"]
+    volumes:
+      - redis-data:/data
+
+  minio:
+    image: minio/minio:latest
+    profiles: ["reserved-infra"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-change-me}
+    ports:
+      - "127.0.0.1:9100:9000"
+      - "127.0.0.1:9101:9001"
+    volumes:
+      - object-data:/data
+
+  schema-migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://ai_drama:${POSTGRES_PASSWORD:-change-me}@db:5432/ai_drama
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://ai_drama:${POSTGRES_PASSWORD:-change-me}@db:5432/ai_drama
+      DATA_ROOT: /app/data
+      PROVIDER_CONFIG_ROOT: /app/config/providers
+      AUTO_CREATE_SCHEMA: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8100:8100"
+    volumes:
+      - ./config:/app/config:ro
+      - studio-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8100/api/v1/readyz', timeout=5)"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  batch-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "app.batch_worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://ai_drama:${POSTGRES_PASSWORD:-change-me}@db:5432/ai_drama
+      DATA_ROOT: /app/data
+      PROVIDER_CONFIG_ROOT: /app/config/providers
+      AUTO_CREATE_SCHEMA: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config:ro
+      - studio-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  object-data:
+  studio-data:

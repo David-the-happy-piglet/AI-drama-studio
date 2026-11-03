@@ -1,9 +1,0 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-tests/
-requirements-dev.txt
-pytest.ini
-*.db
-generated-assets/
-

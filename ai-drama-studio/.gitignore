@@ -1,0 +1,12 @@
+.env
+.env.local
+.ruff_cache/
+data/**/*.db
+data/**/*.sqlite*
+data/**/*.mp4
+data/**/*.mov
+data/**/*.webm
+data/**/*.png
+data/**/*.jpg
+data/**/*.jpeg
+!data/**/.gitkeep

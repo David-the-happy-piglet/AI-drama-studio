@@ -29,6 +29,12 @@ ENV/
 env.bak/
 venv.bak/
 
+# JavaScript dependencies and generated TypeScript/Vite output
+node_modules/
+*.tsbuildinfo
+ai-drama-studio/frontend/vite.config.js
+ai-drama-studio/frontend/vite.config.d.ts
+
 # IDE
 .idea/
 .vscode/
@@ -95,8 +101,19 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 *.db
+*.sqlite
+*.sqlite3
 generated-assets/
 comparison-results/
+
+# Local application state and generated artifacts
+backups/
+ai-drama-studio/data/assets/
+ai-drama-studio/data/backups/
+ai-drama-studio/data/characters/
+ai-drama-studio/data/generations/
+ai-drama-studio/data/locations/
+ai-drama-studio/data/projects/
 
 # mypy
 .mypy_cache/
@@ -111,3 +128,23 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Secrets: only documented example environment files belong in Git
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+credentials*.json
+
+# Local databases, sidecars, dumps and production output
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+*.dump
+*.sql.gz
+*.sql.bak
+data/
+backups/
+exports/
+tmp/

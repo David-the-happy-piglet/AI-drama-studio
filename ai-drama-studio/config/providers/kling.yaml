@@ -1,0 +1,59 @@
+# LEGACY TEMPLATE — no longer read by the Kling provider.
+# Runtime protocol lives in backend/app/providers/video/kling.py.
+# Configure KLING_API_KEY and KLING_BASE_URL in the backend process environment; see
+# docs/PRODUCTION_AND_INTEGRATIONS.md. Fields below are historical only.
+provider: kling
+enabled: false
+
+connection:
+  base_url_env: KLING_BASE_URL
+  create_path: null # TODO(api-verification): official task-creation path
+  status_path: null # TODO(api-verification): official path containing {task_id}
+  cancel_path: null # TODO(api-verification): official path containing {task_id}
+  static_query: {}
+  query_env_map: {}
+  # Example shape only after verification: official-version-param: KLING_API_VERSION
+
+model:
+  name_env: KLING_MODEL
+  api_version_env: KLING_API_VERSION
+
+auth:
+  mode: unconfigured # TODO(api-verification): verify API key vs signed AK/SK flow
+  token_env: KLING_API_KEY
+  header_env_map:
+    # TODO(api-verification): map official headers only if direct-header auth is supported.
+    # X-Access-Key: KLING_ACCESS_KEY
+    # X-Secret-Key: KLING_SECRET_KEY
+  static_headers: {}
+  extra_header_env_map: {}
+  # Example shape only after verification: Official-Version-Header: KLING_API_VERSION
+
+request:
+  # internal field -> official provider field. "prompt" is required before enablement.
+  field_map: {}
+  allow_api_parameters: false
+
+response:
+  task_id_path: null
+  status_path: null
+  progress_path: null
+  output_url_path: null
+  error_path: null
+
+status_mapping: {}
+
+capabilities:
+  # Populate only from the verified model/version documentation.
+  generation_modes: []
+  supports_first_frame: false
+  supports_last_frame: false
+  supports_reference_images: false
+  supports_reference_videos: false
+  supports_reference_audio: false
+  supported_durations: []
+  supported_aspect_ratios: []
+  supported_resolutions: []
+
+pricing:
+  usd_per_second: null
