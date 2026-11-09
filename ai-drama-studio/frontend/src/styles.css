@@ -416,3 +416,29 @@ code { font-family: "DM Mono", monospace; }
 .current-portrait img { width: 70px; height: 90px; object-fit: contain; }
 .current-portrait p { font-size: 12px; }
 @media (max-width: 800px) { .portrait-studio { grid-template-columns: minmax(0, 1fr); } }
+
+/* Director workflow: lint, cold review, prompt tools */
+.director-box { margin-top: 16px; padding: 14px 16px; background: #fff; border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 10px; }
+.director-box-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.director-box-heading span { color: var(--muted); font-size: 12px; }
+.director-box .page-actions { margin: 0; flex-wrap: wrap; }
+.director-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 16px; margin-bottom: 16px; }
+.director-findings ul, .review-report ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.finding { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.6; padding: 8px 10px; border-radius: 6px; background: var(--paper); border: 1px solid var(--line); }
+.finding small { display: block; color: var(--muted); }
+.finding-tag { flex: none; padding: 1px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; background: #eceee5; color: #4b4f46; }
+.finding.warning .finding-tag, .finding.error .finding-tag { background: #ffe9c7; color: #7a4a00; }
+.review-report { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line); font-size: 13px; line-height: 1.7; }
+.review-report p { margin: 6px 0 0; }
+.review-report.pass { border-color: #b9d77a; background: #f6fbe9; }
+.review-report.fail { border-color: #efc27a; background: #fff8ec; }
+.review-verdict { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.review-verdict span { color: var(--muted); font-size: 11px; }
+.gate-badge { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #eceee5; color: #4b4f46; }
+.gate-badge.pass { background: var(--acid); color: var(--dark); }
+.gate-badge.fail { background: #ffe0c2; color: #7a3a00; }
+.direction-fields { margin: 6px 0 10px; }
+.direction-fields summary { cursor: pointer; font-size: 12px; font-weight: 700; color: #484c44; padding: 6px 0; }
+.compiled-sections { display: flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow: auto; font-size: 13px; line-height: 1.7; }
+.compiled-sections p { margin: 2px 0 0; white-space: pre-wrap; }
+.director-board { margin-bottom: 16px; }

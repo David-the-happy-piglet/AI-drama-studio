@@ -331,6 +331,7 @@ class Shot(TimestampMixin, Base):
     generation_mode: Mapped[str] = mapped_column(
         String(40), default="image_to_video", nullable=False
     )
+    direction: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="draft", index=True)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
@@ -473,3 +474,20 @@ class Generation(TimestampMixin, Base):
         if version is not None and version != self.shot.version:
             return "镜头已修改，旧素材需复核"
         return None
+
+
+class Review(TimestampMixin, Base):
+    """Append-only cold-reader review. It never edits the reviewed artifact."""
+
+    __tablename__ = "reviews"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    # story | storyboard | shot_pre_submit
+    stage: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    target_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False)
+    report: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    model: Mapped[str] = mapped_column(String(160), default="", nullable=False)

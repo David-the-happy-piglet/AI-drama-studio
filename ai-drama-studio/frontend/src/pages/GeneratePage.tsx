@@ -5,8 +5,9 @@ import { Callout, Empty, Field, Modal, SubmitButton } from "../components";
 import { ShotCharactersModal } from "../ShotCharactersModal";
 import { ShotKeyframeModal } from "../ShotKeyframeModal";
 import { selectedKeyframeToken } from "../keyframes";
+import { PromptDirectorTools } from "../DirectorPanels";
 import type { KeyframeStudio, SelectedKeyframe } from "../keyframes";
-import type { CharacterBindingPreview, Episode, Generation, Project, SeedanceAccount, Shot, Storyboard, VideoProvider } from "../types";
+import type { CharacterBindingPreview, Episode, Generation, Project, ReviewGate, SeedanceAccount, Shot, Storyboard, VideoProvider } from "../types";
 
 const modeNames: Record<string, string> = {
   text_to_video: "文生视频",
@@ -69,6 +70,8 @@ export function GeneratePage({
   const [referenceVideoUrl, setReferenceVideoUrl] = useState("");
   const [audio, setAudio] = useState<File | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const [reviewGate, setReviewGate] = useState<ReviewGate | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
   const [busy, setBusy] = useState(false);
   const pendingSubmission = useRef<{
     requestToken: string;
@@ -104,6 +107,11 @@ export function GeneratePage({
   const supportedMode = selectedShot && (provider === "kling" ? klingModes : currentProvider?.generation_modes || []).includes(selectedShot.generation_mode);
   const automaticCount = autoBind ? bindingPreview?.elements.length || 0 : 0;
   const frameToken = selectedKeyframeToken(Boolean(firstFrame), savedKeyframe, selectedShot?.generation_mode || "");
+  const frameSource: "selected" | "upload" | "none" = firstFrame ? "upload" : frameToken ? "selected" : "none";
+  const gateBlocks = reviewGate?.mode === "required" && reviewGate.verdict !== "pass";
+  function replaceShot(updated: Shot) {
+    setBoard(current => current ? { ...current, scenes: current.scenes.map(scene => ({ ...scene, shots: scene.shots.map(shot => shot.id === updated.id ? updated : shot) })) } : current);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +182,7 @@ export function GeneratePage({
       if (references.length + automaticCount + (elementId ? 1 : 0) > 4) return notify("Omni 图片与主体参考合计最多 4 个", "error");
     }
     setQuotaConfirmed(false);
+    setOverrideReason("");
     pendingSubmission.current = {
       requestToken: crypto.randomUUID(),
       payload: null,
@@ -208,6 +217,7 @@ export function GeneratePage({
           resolution,
           aspect_ratio: provider === "seedance" && frameMode ? "adaptive" : ratio,
           use_character_bindings: autoBind,
+          review_override_reason: gateBlocks && overrideReason.trim() ? overrideReason.trim() : null,
           first_frame: first?.path ?? null,
           keyframe_selection_token: frameMode && !first ? frameToken : null,
           last_frame: last?.path ?? null,
@@ -257,6 +267,8 @@ export function GeneratePage({
           <div className="section-rule"><span>02 / GENERATION PROMPT</span></div>
           <Field label="正向提示词" hint="按画面主体 → 动作 → 环境 → 摄影机 → 风格的顺序描述。"><textarea required rows={7} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="选择镜头后自动带入画面描述…" /></Field>
           <Field label="负向约束"><textarea rows={3} value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="身份漂移、面部变形、额外手指、字幕、水印…" /></Field>
+          {selectedShot && <PromptDirectorTools key={selectedShot.id} shot={selectedShot} prompt={prompt} frameSource={frameSource} disabled={busy || revisionLocked}
+            onUsePrompt={next => { setPrompt(next); setConfirm(false); }} onShotUpdated={updated => { replaceShot(updated); setConfirm(false); }} onGate={setReviewGate} notify={notify} />}
 
           <div className="section-rule"><span>03 / REFERENCE ASSETS</span></div>
           {selectedShot && <div className="modal-form">
@@ -297,7 +309,7 @@ export function GeneratePage({
 
       {keyframeShot && <ShotKeyframeModal key={keyframeShot.id} shot={keyframeShot} initialRatio={ratio} onClose={() => setKeyframeShot(null)} onSelected={(updated, selected) => {
         setFirstFrame(null); setConfirm(false); setSavedKeyframe(selected);
-        setBoard(current => current ? { ...current, scenes: current.scenes.map(scene => ({ ...scene, shots: scene.shots.map(shot => shot.id === updated.id ? updated : shot) })) } : current);
+        replaceShot(updated);
         setKeyframeShot(null);
         notify("首帧已选定并保存，视频生成时可直接使用；尚未提交视频任务。");
       }} />}
@@ -305,12 +317,15 @@ export function GeneratePage({
       {editingShot && <ShotCharactersModal key={editingShot.id} projectId={project.id} shot={editingShot} onClose={() => setEditingShot(null)} onSaved={updated => {
         setBindingPreview(null);
         setConfirm(false);
-        setBoard(current => current ? { ...current, scenes: current.scenes.map(scene => ({ ...scene, shots: scene.shots.map(shot => shot.id === updated.id ? updated : shot) })) } : current);
+        replaceShot(updated);
         setEditingShot(null);
         notify("角色关联已保存；可灵主体将自动重新核对。未提交生成任务。");
       }} />}
 
-      {confirm && selectedShot && <Modal title="确认提交视频任务" eyebrow="GENERATION CONFIRMATION" onClose={() => !busy && setConfirm(false)}><div className="confirm-summary"><div className="confirm-icon"><ShieldAlert size={24} /></div><p>即将通过 {providerLabel} 提交视频生成任务。</p><dl><div><dt>镜头</dt><dd>{selectedShot.id}</dd></div><div><dt>模型</dt><dd>{model || "后端默认模型"}</dd></div><div><dt>规格</dt><dd>{resolution} · {duration}s</dd></div><div><dt>模式</dt><dd>{modeNames[selectedShot.generation_mode]}</dd></div>{(provider === "kling" || provider === "seedance") && <div><dt>声音</dt><dd>{turbo || nativeAudio ? "原生音画同步" : "无声，后期配音"}</dd></div>}</dl><Callout>{minimax ? "生成会使用账号资源；不采用片段不代表退还额度。本平台未核验实时权益，也无法阻止平台侧补充额度扣费。请先检查后台；超时不要直接重复提交。" : "实际扣费以所选平台账单为准。"}</Callout>{minimax && <label className="quota-confirm"><input type="checkbox" checked={quotaConfirmed} onChange={e => setQuotaConfirmed(e.target.checked)} />我已核对订阅 Key、Hailuo 2.3 权益及今日剩余额度，确认提交一次。</label>}<div className="modal-actions"><button className="ghost-button" type="button" disabled={busy} onClick={() => setConfirm(false)}>返回检查</button><button className="danger-confirm" type="button" disabled={busy || minimax && !quotaConfirmed} onClick={() => void submitGeneration()}>{busy ? <LoaderCircle className="spinning" size={16} /> : <Sparkles size={16} />} 确认并提交</button></div></div></Modal>}
+      {confirm && selectedShot && <Modal title="确认提交视频任务" eyebrow="GENERATION CONFIRMATION" onClose={() => !busy && setConfirm(false)}><div className="confirm-summary"><div className="confirm-icon"><ShieldAlert size={24} /></div><p>即将通过 {providerLabel} 提交视频生成任务。</p><dl><div><dt>镜头</dt><dd>{selectedShot.id}</dd></div><div><dt>模型</dt><dd>{model || "后端默认模型"}</dd></div><div><dt>规格</dt><dd>{resolution} · {duration}s</dd></div><div><dt>模式</dt><dd>{modeNames[selectedShot.generation_mode]}</dd></div>{(provider === "kling" || provider === "seedance") && <div><dt>声音</dt><dd>{turbo || nativeAudio ? "原生音画同步" : "无声，后期配音"}</dd></div>}</dl><Callout>{minimax ? "生成会使用账号资源；不采用片段不代表退还额度。本平台未核验实时权益，也无法阻止平台侧补充额度扣费。请先检查后台；超时不要直接重复提交。" : "实际扣费以所选平台账单为准。"}</Callout>{minimax && <label className="quota-confirm"><input type="checkbox" checked={quotaConfirmed} onChange={e => setQuotaConfirmed(e.target.checked)} />我已核对订阅 Key、Hailuo 2.3 权益及今日剩余额度，确认提交一次。</label>}
+        {reviewGate && reviewGate.verdict !== "pass" && <Callout tone="warning">{reviewGate.verdict === "fail" ? "提交前审核未通过。" : "这段提示词和首帧还没有做提交前审核。"}{gateBlocks ? "当前设置要求审核通过才能提交；如确认要拍，请写明放行理由，理由会记入生成记录。" : "当前设置只记录，不阻止提交。"}</Callout>}
+        {gateBlocks && <Field label="人工放行理由"><textarea rows={2} value={overrideReason} disabled={Boolean(pendingSubmission.current?.payload)} onChange={e => setOverrideReason(e.target.value)} placeholder="例如：审核意见是误判，已人工核对首帧" /></Field>}
+        <div className="modal-actions"><button className="ghost-button" type="button" disabled={busy} onClick={() => setConfirm(false)}>返回检查</button><button className="danger-confirm" type="button" disabled={busy || minimax && !quotaConfirmed || gateBlocks && !overrideReason.trim()} onClick={() => void submitGeneration()}>{busy ? <LoaderCircle className="spinning" size={16} /> : <Sparkles size={16} />} 确认并提交</button></div></div></Modal>}
     </div>
   );
 }

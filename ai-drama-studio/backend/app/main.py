@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .api.character_images import router as character_images_router
+from .api.director import router as director_router
 from .api.planning import router as planning_router
 from .api.production_batches import router as production_batches_router
 from .api.routes import router
@@ -64,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(shot_images_router, prefix=app_settings.api_prefix)
     app.include_router(production_batches_router, prefix=app_settings.api_prefix)
     app.include_router(scene_assets_router, prefix=app_settings.api_prefix)
+    app.include_router(director_router, prefix=app_settings.api_prefix)
     return app
 
 

@@ -5,6 +5,7 @@ import { Callout, Empty, Field, Modal, SubmitButton } from "../components";
 import type { KeyframeStudio } from "../keyframes";
 import type { Character, Episode, Project, Scene, Shot, Storyboard } from "../types";
 import { BatchProductionPanel } from "../BatchProductionPanel";
+import { DirectorBoardPanel } from "../DirectorPanels";
 import { SceneMasterBinding, type SceneAsset } from "./SceneAssetsPage";
 
 type SourceShot = { source_shot_id: string; scene_heading: string; shot_heading: string; fields: Record<string, string> };
@@ -90,6 +91,7 @@ export function StoryboardPage({
             <div className="board-stat"><Clapperboard size={16} /><strong>{storyboard?.scenes.reduce((sum, scene) => sum + scene.shots.length, 0) || 0}</strong><span>镜头</span></div>
           </section>
 
+          <DirectorBoardPanel project={project} episodeId={storyboard?.id || ""} notify={notify} />
           {storyboard && <BatchProductionPanel key={storyboard.id} board={storyboard} notify={notify} onChanged={() => void loadStoryboard()} onShot={id => onGenerate(id, selectedEpisodeId)} />}
           <div className="scene-list">
             {storyboard?.scenes.length ? storyboard.scenes.map((scene) => (

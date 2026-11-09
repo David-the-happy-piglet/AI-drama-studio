@@ -264,6 +264,25 @@ class ShotCharacter(BaseModel):
     outfit_id: str | None = None
 
 
+class ShotBeat(BaseModel):
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    text: str = Field(min_length=1, max_length=1000)
+
+
+class ShotDirection(BaseModel):
+    """Director-level intent per shot. Every field is optional for legacy shots."""
+
+    screen_direction: str = Field(default="", max_length=500)
+    motion_source: list[str] = Field(default_factory=list, max_length=8)
+    frame_entry_exit: str = Field(default="", max_length=500)
+    expression_beat: str = Field(default="", max_length=500)
+    transition_out: str = Field(default="", max_length=500)
+    first_frame: str = Field(default="", max_length=2000)
+    last_frame: str = Field(default="", max_length=2000)
+    beats: list[ShotBeat] = Field(default_factory=list, max_length=12)
+
+
 class ShotCreate(BaseModel):
     id: str | None = None
     order_index: int = Field(ge=1)
@@ -285,6 +304,7 @@ class ShotCreate(BaseModel):
     generation_prompt: str | None = None
     negative_prompt: str | None = None
     generation_mode: GenerationMode = GenerationMode.IMAGE_TO_VIDEO
+    direction: ShotDirection = Field(default_factory=ShotDirection)
 
     @field_validator("manual_provider_override")
     @classmethod
@@ -318,6 +338,7 @@ class ShotRead(ORMModel):
     generation_prompt: str | None
     negative_prompt: str | None
     generation_mode: str
+    direction: dict[str, Any] = Field(default_factory=dict)
     status: str
     version: int
     created_at: datetime
@@ -345,6 +366,7 @@ class ShotUpdate(BaseModel):
     generation_prompt: str | None = None
     negative_prompt: str | None = None
     generation_mode: GenerationMode | None = None
+    direction: ShotDirection | None = None
     status: str | None = None
 
     @field_validator("manual_provider_override")
@@ -384,6 +406,7 @@ class GenerationCreate(BaseModel):
     last_frame: str | None = None
     api_parameters: dict[str, Any] = Field(default_factory=dict)
     use_character_bindings: bool = True
+    review_override_reason: str | None = Field(default=None, max_length=500)
 
     @field_validator("provider")
     @classmethod

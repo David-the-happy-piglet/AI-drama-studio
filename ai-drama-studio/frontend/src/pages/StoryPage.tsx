@@ -4,6 +4,7 @@ import { api, errorMessage, postJson } from "../api";
 import { Callout, Empty, Field, Modal } from "../components";
 import type { Episode, Project, Shot } from "../types";
 import { ExternalStoryboardImport } from "../ExternalStoryboardImport";
+import { ColdReviewPanel, DirectionFields, DraftLintPanel } from "../DirectorPanels";
 
 type DraftScene = { id?: string | null; location: string; time_of_day: string; summary: string; shots: Partial<Shot>[] };
 type Draft = { screenplay: string; scenes: DraftScene[] };
@@ -143,9 +144,14 @@ export function StoryPage({ project, preselectedEpisodeId, notify, onPublished }
         <Field label="完整剧本" hint="可直接粘贴其他模型修改后的完整剧本。根据当前剧本生成分镜不会改写这里的原文。"><textarea className="screenplay-editor" rows={14} disabled={published || busy} value={draft.screenplay} onChange={e => edit({ ...draft, screenplay: e.target.value }, true)} /></Field>
         {!published && <><div className="page-actions"><button className="primary-button" disabled={busy || !status?.configured || draft.screenplay.trim().length < 5} onClick={() => setConfirmation("generate-storyboard")}><Sparkles size={16} />{busy && confirmation === "generate-storyboard" ? "正在拆分分镜，请勿重复提交…" : "根据当前剧本生成分镜"}</button></div><p className="muted">直接使用文本框中的最新剧本，无需先保存；成功后替换当前待审分镜并保存。不会自动发布或生成视频。</p>{!status?.configured && <Callout>尚未配置文本模型，暂不能自动拆分分镜。请配置后端 PLANNING_API_URL、PLANNING_API_KEY、PLANNING_MODEL 并重启；现在仍可粘贴、保存和手动编辑。</Callout>}</>}
         {!published && <div className="page-actions"><button className="soft-button" disabled={busy} onClick={() => void save(false)}><Save size={16} /> 保存待审稿</button><button className="primary-button" disabled={busy || !draft.screenplay.trim()} onClick={() => void save(true)}><Check size={16} /> 确认剧本并保存</button></div>}
+        <ColdReviewPanel key={`${script.id}-story`} scriptId={script.id} scriptVersion={script.version} stage="story" dirty={dirty} notify={notify} />
       </section>
       <section className="panel" ref={storyboardPanel}><div className="panel-heading"><h3>分镜审阅</h3><span>{draft.scenes.reduce((sum, scene) => sum + scene.shots.length, 0)} 镜头 · {draft.scenes.reduce((sum, scene) => sum + scene.shots.reduce((n, shot) => n + Number(shot.duration || 0), 0), 0)} 秒</span></div>
         {autofilled && <Callout tone="success">分镜已自动填入并保存为待审稿。下方画面、对白、时长、运镜和视频提示词均可继续微调；改完请保存。尚未批准，也未生成视频。</Callout>}
+        <div className="director-pair">
+          <DraftLintPanel scenes={draft.scenes} notify={notify} />
+          <ColdReviewPanel key={`${script.id}-storyboard`} scriptId={script.id} scriptVersion={script.version} stage="storyboard" dirty={dirty} notify={notify} />
+        </div>
         {draft.scenes.map((scene, sceneIndex) => <fieldset className="review-scene" key={scene.id || sceneIndex} disabled={published || busy}><legend>场景 {sceneIndex + 1}</legend>
           <button className="text-button" onClick={() => edit({ ...draft, scenes: draft.scenes.filter((_, i) => i !== sceneIndex) })}>移除此场景</button>
           <div className="field-grid two"><Field label="地点"><input value={scene.location} onChange={e => editScene(sceneIndex, { ...scene, location: e.target.value })} /></Field><Field label="时间"><input value={scene.time_of_day} onChange={e => editScene(sceneIndex, { ...scene, time_of_day: e.target.value })} /></Field></div>
@@ -158,6 +164,7 @@ export function StoryPage({ project, preselectedEpisodeId, notify, onPublished }
               <Field label="对白 / 旁白"><input value={shot.dialogue || ""} onChange={e => change({ dialogue: e.target.value })} /></Field>
               <Field label="视频生成提示词" hint="修改画面或对白后，请同步检查此处的台词、说话人、口型和声音指令。画面编辑不会覆盖这份提示词。"><textarea rows={5} value={shot.generation_prompt || ""} onChange={e => change({ generation_prompt: e.target.value })} /></Field>
               <Field label="运镜"><input value={shot.camera_movement || "static"} onChange={e => change({ camera_movement: e.target.value })} /></Field>
+              <DirectionFields value={shot.direction} onChange={direction => change({ direction })} />
               <button className="text-button" onClick={() => editScene(sceneIndex, { ...scene, shots: scene.shots.filter((_, i) => i !== shotIndex) })}>移除此镜头</button>
             </div>;
           })}

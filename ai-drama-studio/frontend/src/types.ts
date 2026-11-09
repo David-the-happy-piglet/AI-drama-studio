@@ -126,9 +126,83 @@ export interface Shot {
   generation_prompt: string | null;
   negative_prompt: string | null;
   generation_mode: GenerationMode;
+  direction?: ShotDirection;
   status: string;
   version: number;
   created_at: string;
+}
+
+export interface ShotDirection {
+  screen_direction?: string;
+  motion_source?: string[];
+  frame_entry_exit?: string;
+  expression_beat?: string;
+  transition_out?: string;
+  first_frame?: string;
+  last_frame?: string;
+  beats?: Array<{ start: number; end: number; text: string }>;
+}
+
+export interface LintFinding {
+  ref: string;
+  scene_index: number;
+  shot_index: number;
+  shot_id: string | null;
+  rule: string;
+  severity: "error" | "warning" | "info";
+  message: string;
+  suggestion: string;
+}
+
+export interface LintResult {
+  summary: Record<string, number>;
+  findings: LintFinding[];
+}
+
+export interface ReviewIssue {
+  target: string;
+  problem: string;
+  suggestion: string;
+  certainty: string;
+  severity: string;
+}
+
+export interface ReviewReport {
+  understood_story: string;
+  one_line_theme: string;
+  issues: ReviewIssue[];
+  cannot_check: string[];
+  verdict: "pass" | "fail";
+}
+
+export interface Review {
+  id: string;
+  stage: "story" | "storyboard" | "shot_pre_submit";
+  target_id: string;
+  target_version: number;
+  verdict: "pass" | "fail";
+  report: ReviewReport;
+  model: string;
+  created_at: string;
+}
+
+export interface CompiledPrompt {
+  prompt: string;
+  sections: Record<string, string>;
+  notes: string[];
+  current_prompt: string | null;
+}
+
+export interface ReviewGate {
+  mode: "off" | "warn" | "required";
+  verdict: "pass" | "fail" | "missing";
+  review_id?: string;
+  report?: ReviewReport | null;
+}
+
+export interface DirectorStatus {
+  review_model: { configured: boolean; missing: string[]; model: string };
+  review_gate: "off" | "warn" | "required";
 }
 
 export type GenerationMode =

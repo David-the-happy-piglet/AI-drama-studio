@@ -30,6 +30,9 @@ class GenerationConflictError(ValueError):
 
 def _payload_fingerprint(payload: GenerationCreate) -> str:
     canonical = payload.model_dump(mode="json", exclude={"confirmed", "request_token"})
+    # Keep fingerprints of requests made before the review gate existed stable.
+    if canonical.get("review_override_reason") is None:
+        canonical.pop("review_override_reason", None)
     encoded = json.dumps(
         canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
@@ -91,6 +94,22 @@ class GenerationService:
         negative_prompt = payload.negative_prompt
         if negative_prompt is None:
             negative_prompt = shot.negative_prompt or ""
+        from .director import gate_check
+
+        if keyframe_snapshot:
+            frame_fingerprint = keyframe_snapshot["sha256"]
+        elif first_frame:
+            # Manually uploaded frames are never covered by a stored review.
+            frame_fingerprint = f"upload:{first_frame}"
+        else:
+            frame_fingerprint = None
+        review_snapshot = gate_check(
+            db,
+            shot,
+            prompt=prompt,
+            first_frame_sha256=frame_fingerprint,
+            override_reason=payload.review_override_reason,
+        )
         duration = payload.duration or shot.duration
         model = provider.resolve_model(payload.model or shot.preferred_model) or ""
         api_parameters = dict(payload.api_parameters)
@@ -146,6 +165,7 @@ class GenerationService:
                 "use_character_bindings": payload.use_character_bindings,
                 "character_bindings": character_binding_snapshot,
                 "selected_keyframe": keyframe_snapshot,
+                "pre_submit_review": review_snapshot,
                 "idempotency_payload_sha256": fingerprint,
             },
         )
